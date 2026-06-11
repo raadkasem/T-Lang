@@ -5,7 +5,7 @@ chat-completions API (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
 
 **Made with Claude by [Raad Kasem](https://github.com/raadkasem)**
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License](https://img.shields.io/badge/license-MIT-green)
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License](https://img.shields.io/badge/license-Apache%202.0-green)
 
 ## Design — Lapis & Gold
 
@@ -104,6 +104,10 @@ Sources/TLang/
 ├── ViewModels/               # translation state machine (debounce, streaming)
 └── UI/                       # main window, menu bar, settings, floating panel
 ```
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE).
 
 ## Credits
 
