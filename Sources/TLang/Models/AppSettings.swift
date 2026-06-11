@@ -25,18 +25,33 @@ final class AppSettings: ObservableObject {
     private let defaults = UserDefaults.standard
 
     @Published var provider: ProviderPreset {
-        didSet { defaults.set(provider.rawValue, forKey: K.provider) }
+        didSet {
+            guard provider != oldValue else { return }
+            defaults.set(provider.rawValue, forKey: K.provider)
+            flushPendingKeychain(for: oldValue)
+            loadProfile()
+        }
     }
     @Published var baseURL: String {
-        didSet { defaults.set(baseURL, forKey: K.baseURL) }
+        didSet {
+            guard !isLoadingProfile else { return }
+            defaults.set(baseURL, forKey: Self.profileKey("baseURL", provider))
+        }
     }
     @Published var model: String {
-        didSet { defaults.set(model, forKey: K.model) }
+        didSet {
+            guard !isLoadingProfile else { return }
+            defaults.set(model, forKey: Self.profileKey("model", provider))
+        }
     }
     @Published var apiKey: String {
-        didSet { scheduleKeychainSave() }
+        didSet {
+            guard !isLoadingProfile else { return }
+            scheduleKeychainSave()
+        }
     }
     private var keychainSaveTask: Task<Void, Never>?
+    private var isLoadingProfile = false
     @Published var autoTranslate: Bool {
         didSet { defaults.set(autoTranslate, forKey: K.autoTranslate) }
     }
@@ -71,10 +86,33 @@ final class AppSettings: ObservableObject {
 
     private init() {
         let d = UserDefaults.standard
-        provider = ProviderPreset(rawValue: d.string(forKey: K.provider) ?? "") ?? .openai
-        baseURL = d.string(forKey: K.baseURL) ?? ProviderPreset.openai.defaultBaseURL
-        model = d.string(forKey: K.model) ?? ProviderPreset.openai.defaultModel
-        apiKey = KeychainStore.get("api-key") ?? ""
+        let p = ProviderPreset(rawValue: d.string(forKey: K.provider) ?? "") ?? .openai
+
+        // Migrate legacy single-profile storage (pre-1.3) into the current
+        // provider's profile, so nothing the user configured is lost.
+        if let legacyURL = d.string(forKey: K.baseURL) {
+            if d.string(forKey: Self.profileKey("baseURL", p)) == nil {
+                d.set(legacyURL, forKey: Self.profileKey("baseURL", p))
+            }
+            d.removeObject(forKey: K.baseURL)
+        }
+        if let legacyModel = d.string(forKey: K.model) {
+            if d.string(forKey: Self.profileKey("model", p)) == nil {
+                d.set(legacyModel, forKey: Self.profileKey("model", p))
+            }
+            d.removeObject(forKey: K.model)
+        }
+        if let legacyKey = KeychainStore.get("api-key") {
+            if KeychainStore.get(Self.keychainAccount(p)) == nil {
+                KeychainStore.set(legacyKey, account: Self.keychainAccount(p))
+            }
+            KeychainStore.delete("api-key")
+        }
+
+        provider = p
+        baseURL = d.string(forKey: Self.profileKey("baseURL", p)) ?? p.defaultBaseURL
+        model = d.string(forKey: Self.profileKey("model", p)) ?? p.defaultModel
+        apiKey = KeychainStore.get(Self.keychainAccount(p)) ?? ""
         autoTranslate = Self.bool(d, K.autoTranslate, default: true)
         clipboardWatcher = Self.bool(d, K.clipboardWatcher, default: true)
         hotkeyEnabled = Self.bool(d, K.hotkeyEnabled, default: true)
@@ -90,13 +128,25 @@ final class AppSettings: ObservableObject {
         d.object(forKey: key) == nil ? def : d.bool(forKey: key)
     }
 
-    /// Switch base URL / model to the preset defaults when the user picks a preset.
-    func applyPresetDefaults() {
-        guard provider != .custom else { return }
-        baseURL = provider.defaultBaseURL
-        if !provider.defaultModel.isEmpty {
-            model = provider.defaultModel
-        }
+    // MARK: Per-provider profiles
+
+    /// Each provider keeps its own base URL / model (UserDefaults) and API key
+    /// (Keychain), so switching presets never loses configuration.
+    private static func profileKey(_ field: String, _ p: ProviderPreset) -> String {
+        "\(field).\(p.rawValue)"
+    }
+
+    private static func keychainAccount(_ p: ProviderPreset) -> String {
+        "api-key.\(p.rawValue)"
+    }
+
+    /// Load the newly selected provider's saved profile (or its defaults).
+    private func loadProfile() {
+        isLoadingProfile = true
+        baseURL = defaults.string(forKey: Self.profileKey("baseURL", provider)) ?? provider.defaultBaseURL
+        model = defaults.string(forKey: Self.profileKey("model", provider)) ?? provider.defaultModel
+        apiKey = KeychainStore.get(Self.keychainAccount(provider)) ?? ""
+        isLoadingProfile = false
     }
 
     /// Keychain writes are synchronous IPC — doing one per keystroke freezes
@@ -104,18 +154,28 @@ final class AppSettings: ObservableObject {
     private func scheduleKeychainSave() {
         keychainSaveTask?.cancel()
         let value = apiKey
+        let account = Self.keychainAccount(provider)
         keychainSaveTask = Task.detached(priority: .utility) {
             try? await Task.sleep(nanoseconds: 600_000_000)
             guard !Task.isCancelled else { return }
-            KeychainStore.set(value, account: "api-key")
+            KeychainStore.set(value, account: account)
         }
+    }
+
+    /// If a debounced key write is still pending when the provider changes,
+    /// persist it under the OLD provider's account before loading the new one.
+    private func flushPendingKeychain(for old: ProviderPreset) {
+        guard keychainSaveTask != nil else { return }
+        keychainSaveTask?.cancel()
+        keychainSaveTask = nil
+        KeychainStore.set(apiKey, account: Self.keychainAccount(old))
     }
 
     /// Synchronously persist anything still pending (called on app quit).
     func flushPendingWrites() {
         keychainSaveTask?.cancel()
         keychainSaveTask = nil
-        KeychainStore.set(apiKey, account: "api-key")
+        KeychainStore.set(apiKey, account: Self.keychainAccount(provider))
     }
 
     private func applyLaunchAtLogin() {

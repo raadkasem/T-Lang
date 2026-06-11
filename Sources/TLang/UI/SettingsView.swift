@@ -165,7 +165,6 @@ private struct ProviderSettingsTab: View {
                         .labelsHidden()
                         .frame(width: 160)
                         .onChange(of: settings.provider) { _, _ in
-                            settings.applyPresetDefaults()
                             testState = .idle
                         }
                     }
@@ -396,7 +395,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Version 1.2.0")
+            Text("Version 1.3.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)
