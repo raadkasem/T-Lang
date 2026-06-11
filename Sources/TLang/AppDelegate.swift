@@ -32,7 +32,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyActivationPolicy()
         wireServices()
         openMainWindow()
+        runScreenshotModeIfRequested()
     }
+
+    /// Debug hook: when TLANG_SCREENSHOT_DIR is set, render the main window
+    /// (dark + light) and settings to PNGs there, then quit. Renders our own
+    /// views via cacheDisplay, so no Screen Recording permission is needed.
+    private func runScreenshotModeIfRequested() {
+        guard let dir = ProcessInfo.processInfo.environment["TLANG_SCREENSHOT_DIR"] else { return }
+        let dirURL = URL(fileURLWithPath: dir, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dirURL, withIntermediateDirectories: true)
+
+        TranslatorViewModel.main.setTexts(
+            source: "Machine learning models translate context, not just words.",
+            output: "تترجم نماذج التعلم الآلي السياق، لا الكلمات فقط.",
+            direction: .enToAr
+        )
+        mainWindow?.setContentSize(NSSize(width: 940, height: 560))
+
+        func snap(_ window: NSWindow?, _ name: String) {
+            guard let view = window?.contentView,
+                  let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
+            else { return }
+            view.cacheDisplay(in: view.bounds, to: rep)
+            if let data = rep.representation(using: .png, properties: [:]) {
+                try? data.write(to: dirURL.appendingPathComponent(name))
+            }
+        }
+
+        // Delay the first appearance change: the settings appearance sink runs
+        // on a queued task right after launch and would override it.
+        let queue = DispatchQueue.main
+        queue.asyncAfter(deadline: .now() + 0.4) {
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+        queue.asyncAfter(deadline: .now() + 1.6) { [self] in
+            snap(mainWindow, "main-dark.png")
+            NSApp.appearance = NSAppearance(named: .aqua)
+        }
+        queue.asyncAfter(deadline: .now() + 2.8) { [self] in
+            snap(mainWindow, "main-light.png")
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+            // Show demo provider values so no private endpoint/model leaks
+            // into published screenshots. Provider switching is lossless
+            // (per-provider profiles), and it's restored before quitting.
+            screenshotRestoreProvider = AppSettings.shared.provider
+            AppSettings.shared.provider = .openai
+            AppSettings.shared.showDemoProfileForScreenshots()
+            openSettingsWindow()
+        }
+        queue.asyncAfter(deadline: .now() + 4.0) { [self] in
+            snap(settingsWindow, "settings-dark.png")
+            if let original = screenshotRestoreProvider {
+                AppSettings.shared.provider = original
+            }
+            NSApp.terminate(nil)
+        }
+    }
+
+    private var screenshotRestoreProvider: ProviderPreset?
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false

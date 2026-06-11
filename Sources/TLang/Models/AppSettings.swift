@@ -149,6 +149,16 @@ final class AppSettings: ObservableObject {
         isLoadingProfile = false
     }
 
+    /// Screenshot mode only: display representative demo values in the
+    /// provider fields without persisting them anywhere.
+    func showDemoProfileForScreenshots() {
+        isLoadingProfile = true
+        baseURL = "https://api.openai.com/v1"
+        model = "gpt-4.1-mini"
+        apiKey = "sk-demo-key-not-real"
+        isLoadingProfile = false
+    }
+
     /// Keychain writes are synchronous IPC — doing one per keystroke freezes
     /// the API-key field. Debounce and write off the main thread instead.
     private func scheduleKeychainSave() {

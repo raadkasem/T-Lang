@@ -7,6 +7,18 @@ chat-completions API (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue) ![Swift](https://img.shields.io/badge/Swift-6-orange) ![License](https://img.shields.io/badge/license-MIT-green)
 
+## Design — Lapis & Gold
+
+Inspired by illuminated Arabic manuscripts: **English is lapis, Arabic is gold**,
+and translation is the gradient between them. Full light & dark mode
+(Auto / Light / Dark switch in the header), with Liquid Glass on macOS 26+.
+
+| Dark | Light |
+|------|-------|
+| ![TLang dark mode](screenshots/main-dark.png) | ![TLang light mode](screenshots/main-light.png) |
+
+<p align="center"><img src="screenshots/settings-dark.png" width="400" alt="TLang settings"></p>
+
 ## Features
 
 - **Two-pane translator** — side-by-side editor with live streaming output, proper
