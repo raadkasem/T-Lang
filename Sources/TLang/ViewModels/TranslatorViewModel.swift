@@ -59,6 +59,7 @@ final class TranslatorViewModel: ObservableObject {
         translateTask?.cancel()
         generation += 1
         let gen = generation
+        SpeechService.shared.stop()
 
         let dir = LanguageDetector.detect(text)
         direction = dir
@@ -123,6 +124,7 @@ final class TranslatorViewModel: ObservableObject {
 
     func clear() {
         stop()
+        SpeechService.shared.stop()
         setTexts(source: "", output: "")
         errorMessage = nil
     }

@@ -20,6 +20,8 @@ chat-completions API (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
   original selection automatically.
 - **Menu bar + full window** — a compact menu bar popover and a full translator
   window; optionally hide the Dock icon for menu-bar-only mode.
+- **Text-to-speech** — speaker icon on every pane reads the text aloud with the
+  best installed system voice for each language (offline, free).
 - **Local history** — translations are saved to
   `~/Library/Application Support/TLang/history.json` (searchable, pinnable,
   never leaves your Mac; can be disabled).

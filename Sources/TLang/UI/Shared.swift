@@ -28,6 +28,34 @@ struct CopyButton: View {
     }
 }
 
+/// Speaker button: reads the pane's text aloud in its language's voice.
+/// Animated while speaking; click again to stop.
+struct SpeakerButton: View {
+    let text: String
+    let isArabic: Bool
+    let id: String
+    @ObservedObject private var speech = SpeechService.shared
+    @State private var hovering = false
+
+    private var speaking: Bool { speech.speakingID == id }
+    private var tint: Color { Theme.languageColor(isArabic: isArabic) }
+
+    var body: some View {
+        Button {
+            speech.toggle(text: text, isArabic: isArabic, id: id)
+        } label: {
+            Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(speaking ? tint : (hovering ? Theme.textPrimary : Theme.textTertiary))
+                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: speaking)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(speaking ? "Stop speaking" : "Speak aloud")
+        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+}
+
 /// Small native spinner shown while streaming. Uses NSProgressIndicator under
 /// the hood — SwiftUI repeatForever animations burn CPU when views re-render.
 struct StreamingIndicator: View {

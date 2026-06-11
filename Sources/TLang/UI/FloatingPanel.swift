@@ -214,6 +214,7 @@ struct FloatingPanelView: View {
                 .padding(.horizontal, 13)
 
             HStack(spacing: 8) {
+                SpeakerButton(text: vm.outputText, isArabic: isRTL, id: "panel")
                 CopyButton(text: vm.outputText)
                 Button {
                     PasteService.pasteIntoFrontApp(vm.outputText)

@@ -175,6 +175,7 @@ struct EditorCard: View {
                     Text("\(text.count)")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(Theme.textTertiary)
+                    SpeakerButton(text: text, isArabic: isRTL, id: "source")
                     Button {
                         onClear?()
                     } label: {
@@ -236,6 +237,9 @@ struct OutputCard: View {
                             .foregroundStyle(Theme.textTertiary)
                     }
                     StreamingIndicator()
+                }
+                if !vm.outputText.isEmpty {
+                    SpeakerButton(text: vm.outputText, isArabic: isRTL, id: "output")
                 }
                 CopyButton(text: vm.outputText)
             }
