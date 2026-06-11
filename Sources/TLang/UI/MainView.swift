@@ -6,58 +6,64 @@ struct MainView: View {
     @State private var showHistory = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            HStack(spacing: 0) {
-                translator
-                if showHistory {
-                    Divider()
-                    HistorySidebar { entry in
-                        vm.setTexts(
-                            source: entry.source,
-                            output: entry.translation,
-                            direction: entry.direction
-                        )
+        ZStack {
+            AppBackground()
+            VStack(spacing: 0) {
+                header
+                HStack(spacing: 0) {
+                    translator
+                    if showHistory {
+                        Rectangle()
+                            .fill(Theme.stroke)
+                            .frame(width: 1)
+                        HistorySidebar { entry in
+                            vm.setTexts(
+                                source: entry.source,
+                                output: entry.translation,
+                                direction: entry.direction
+                            )
+                        }
+                        .frame(width: 300)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
-                    .frame(width: 300)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
         }
         .frame(minWidth: 720, minHeight: 440)
-        .background(VisualEffectBackground().ignoresSafeArea())
         .animation(.easeInOut(duration: 0.2), value: showHistory)
+        .tint(Theme.lapis)
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             // Leave room for traffic lights in the transparent title bar.
-            Spacer().frame(width: 66)
+            Spacer().frame(width: 62)
+            LogoMark(size: 22)
             Text("TLang")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
             Spacer()
             DirectionPill(direction: vm.direction)
             Spacer()
-            Button {
+            IconButton(
+                systemImage: settings.appearance.icon,
+                help: "Appearance: \(settings.appearance.label) — click to switch"
+            ) {
+                settings.appearance = settings.appearance.next
+            }
+            IconButton(
+                systemImage: "clock.arrow.circlepath",
+                active: showHistory,
+                help: "Translation history"
+            ) {
                 showHistory.toggle()
-            } label: {
-                Image(systemName: "clock.arrow.circlepath")
-                    .foregroundStyle(showHistory ? Color.accentColor : Color.secondary)
             }
-            .buttonStyle(.plain)
-            .help("Translation history")
-            Button {
+            IconButton(systemImage: "gearshape", help: "Settings") {
                 AppDelegate.shared?.openSettingsWindow()
-            } label: {
-                Image(systemName: "gearshape")
-                    .foregroundStyle(.secondary)
             }
-            .buttonStyle(.plain)
-            .help("Settings")
         }
-        .font(.system(size: 14))
         .padding(.horizontal, 16)
-        .frame(height: 52)
+        .frame(height: 54)
     }
 
     private var translator: some View {
@@ -65,48 +71,40 @@ struct MainView: View {
             HStack(alignment: .center, spacing: 10) {
                 EditorCard(
                     title: vm.direction.sourceName,
+                    accent: Theme.languageColor(isArabic: vm.direction == .arToEn),
                     text: $vm.sourceText,
                     isRTL: vm.direction.sourceIsRTL,
-                    placeholder: "Type or paste text — or just copy text anywhere",
+                    placeholder: "Type or paste — or just copy text anywhere",
                     onClear: { vm.clear() }
                 )
 
-                Button {
+                SwapButton(disabled: vm.outputText.isEmpty) {
                     vm.swap()
-                } label: {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(.quaternary.opacity(0.7)))
                 }
-                .buttonStyle(.plain)
-                .help("Swap — translate the result back")
-                .disabled(vm.outputText.isEmpty)
 
                 OutputCard(vm: vm)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 10)
+            .padding(.bottom, 12)
 
             footer
         }
     }
 
     private var footer: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 18) {
             Toggle("Auto-translate", isOn: $settings.autoTranslate)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                .toggleStyle(PillToggleStyle())
             Toggle("Watch clipboard", isOn: $settings.clipboardWatcher)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                .toggleStyle(PillToggleStyle(tint: Theme.gold))
             Spacer()
             if let error = vm.errorMessage {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 11))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(Theme.coral)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .frame(maxWidth: 300, alignment: .trailing)
                     .help(error)
             }
             if vm.isTranslating {
@@ -116,7 +114,7 @@ struct MainView: View {
                     Label("Stop", systemImage: "stop.fill")
                 }
                 .keyboardShortcut(".", modifiers: .command)
-                .buttonStyle(.bordered)
+                .buttonStyle(DangerButtonStyle())
             } else {
                 Button {
                     vm.translateNow()
@@ -124,73 +122,94 @@ struct MainView: View {
                     Label("Translate", systemImage: "sparkles")
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GradientButtonStyle())
                 .disabled(vm.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .font(.system(size: 12))
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
     }
 }
 
+struct SwapButton: View {
+    var disabled: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.left.arrow.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(disabled ? AnyShapeStyle(Theme.textTertiary) : AnyShapeStyle(Theme.accentGradient))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(hovering && !disabled ? Theme.cardHover : Theme.field))
+                .overlay(Circle().strokeBorder(Theme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Swap — translate the result back")
+        .disabled(disabled)
+    }
+}
+
 struct EditorCard: View {
     let title: String
+    let accent: Color
     @Binding var text: String
     let isRTL: Bool
     var placeholder = ""
     var onClear: (() -> Void)?
+    @FocusState private var focused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 5, height: 5)
                 Text(title)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(accent.opacity(0.95))
                 Spacer()
                 if !text.isEmpty {
                     Text("\(text.count)")
                         .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.textTertiary)
                     Button {
                         onClear?()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textTertiary)
                     }
                     .buttonStyle(.plain)
                     .help("Clear")
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
+            .padding(.horizontal, 13)
+            .padding(.top, 11)
             .padding(.bottom, 6)
 
             ZStack(alignment: isRTL ? .topTrailing : .topLeading) {
                 if text.isEmpty && !placeholder.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 15))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 12)
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 13)
                         .padding(.top, 1)
                         .allowsHitTesting(false)
                 }
                 TextEditor(text: $text)
                     .font(.system(size: 15))
                     .lineSpacing(4)
+                    .foregroundStyle(Theme.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
+                    .focused($focused)
                     .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.65))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .glassCard(focus: focused ? accent : nil)
     }
 }
 
@@ -198,34 +217,38 @@ struct OutputCard: View {
     @ObservedObject var vm: TranslatorViewModel
 
     private var isRTL: Bool { vm.direction.targetIsRTL }
+    private var accent: Color { Theme.languageColor(isArabic: vm.direction == .enToAr) }
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(accent)
+                    .frame(width: 5, height: 5)
                 Text(vm.direction.targetName)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(accent.opacity(0.95))
                 Spacer()
                 if vm.isTranslating {
                     if vm.isThinkingPhase {
                         Text("thinking…")
                             .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Theme.textTertiary)
                     }
                     StreamingIndicator()
                 }
                 CopyButton(text: vm.outputText)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
+            .padding(.horizontal, 13)
+            .padding(.top, 11)
             .padding(.bottom, 6)
 
             ZStack(alignment: isRTL ? .topTrailing : .topLeading) {
                 if vm.outputText.isEmpty {
                     Text(vm.isTranslating ? "Translating…" : "Translation appears here")
                         .font(.system(size: 15))
-                        .foregroundStyle(.tertiary)
-                        .padding(.horizontal, 12)
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 13)
                         .padding(.top, 1)
                         .allowsHitTesting(false)
                 }
@@ -234,18 +257,12 @@ struct OutputCard: View {
                 TextEditor(text: .constant(vm.outputText))
                     .font(.system(size: 15))
                     .lineSpacing(4)
+                    .foregroundStyle(Theme.textPrimary)
                     .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 7)
+                    .padding(.horizontal, 8)
                     .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .textBackgroundColor).opacity(0.4))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
-        )
+        .glassCard(focus: vm.isTranslating ? accent : nil)
     }
 }

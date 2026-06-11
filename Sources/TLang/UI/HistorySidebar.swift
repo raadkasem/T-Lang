@@ -21,50 +21,53 @@ struct HistorySidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("History")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                UppercaseLabel("History")
                 Spacer()
                 if !history.entries.isEmpty {
                     Button("Clear") {
                         history.clearAll(keepPinned: true)
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textTertiary)
                     .help("Remove all unpinned entries")
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
 
             HStack(spacing: 6) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textTertiary)
                 TextField("Search history", text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                    .foregroundStyle(Theme.textPrimary)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(.quaternary.opacity(0.5))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Theme.field)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Theme.stroke, lineWidth: 1)
             )
             .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.bottom, 10)
 
             if filtered.isEmpty {
                 Spacer()
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
                     Image(systemName: "clock.arrow.circlepath")
-                        .font(.system(size: 24))
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 22))
+                        .foregroundStyle(Theme.textTertiary)
                     Text(history.entries.isEmpty ? "No translations yet" : "No matches")
                         .font(.system(size: 12))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.textTertiary)
                 }
                 Spacer()
             } else {
@@ -88,6 +91,10 @@ private struct HistoryRow: View {
     var onSelect: (HistoryEntry) -> Void
     @State private var hovering = false
 
+    private var chipColor: Color {
+        Theme.languageColor(isArabic: entry.direction == .arToEn)
+    }
+
     var body: some View {
         Button {
             onSelect(entry)
@@ -95,34 +102,39 @@ private struct HistoryRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(entry.direction == .enToAr ? "EN → AR" : "AR → EN")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 8.5, weight: .bold))
+                        .foregroundStyle(chipColor)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 2)
-                        .background(Capsule().fill(.quaternary.opacity(0.6)))
+                        .background(Capsule().fill(chipColor.opacity(0.13)))
                     if entry.pinned {
                         Image(systemName: "pin.fill")
                             .font(.system(size: 8))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Theme.gold)
                     }
                     Spacer()
                     Text(entry.date, format: .relative(presentation: .named))
                         .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.textTertiary)
                 }
                 Text(entry.source)
                     .font(.system(size: 12))
+                    .foregroundStyle(Theme.textPrimary)
                     .lineLimit(2)
                 Text(entry.translation)
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.textSecondary)
                     .lineLimit(2)
             }
-            .padding(8)
+            .padding(9)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(hovering ? Color.primary.opacity(0.06) : Color.primary.opacity(0.025))
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(hovering ? Theme.cardHover : Theme.card)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(hovering ? Theme.strokeStrong : Theme.stroke, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

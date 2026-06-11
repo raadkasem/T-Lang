@@ -1,27 +1,11 @@
 import AppKit
 import SwiftUI
 
-/// Frosted window background.
-struct VisualEffectBackground: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .underWindowBackground
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-    }
-}
-
 /// Copy button that briefly flips to a checkmark.
 struct CopyButton: View {
     let text: String
     @State private var copied = false
+    @State private var hovering = false
 
     var body: some View {
         Button {
@@ -33,10 +17,12 @@ struct CopyButton: View {
             }
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                .foregroundStyle(copied ? .green : .secondary)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(copied ? Theme.green : (hovering ? Theme.textPrimary : Theme.textTertiary))
                 .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help("Copy")
         .disabled(text.isEmpty)
     }
@@ -48,27 +34,35 @@ struct StreamingIndicator: View {
     var body: some View {
         ProgressView()
             .controlSize(.small)
+            .tint(Theme.gold)
     }
 }
 
-/// Capsule showing the live translation direction.
+/// Language chips joined by the lapis→gold gradient arrow.
+/// English is always lapis; Arabic is always gold.
 struct DirectionPill: View {
     let direction: Direction
+    var compact = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(direction.sourceName)
-                .fontWeight(.medium)
+        HStack(spacing: compact ? 7 : 9) {
+            chip(direction.sourceName, isArabic: direction == .arToEn)
             Image(systemName: "arrow.right")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary)
-            Text(direction.targetName)
-                .fontWeight(.medium)
+                .font(.system(size: compact ? 8 : 9, weight: .black))
+                .foregroundStyle(Theme.accentGradient)
+            chip(direction.targetName, isArabic: direction == .enToAr)
         }
-        .font(.system(size: 12))
-        .padding(.horizontal, 12)
-        .padding(.vertical, 5)
-        .background(Capsule().fill(.quaternary.opacity(0.6)))
         .animation(.easeInOut(duration: 0.2), value: direction)
+    }
+
+    private func chip(_ name: String, isArabic: Bool) -> some View {
+        let color = Theme.languageColor(isArabic: isArabic)
+        return Text(name)
+            .font(.system(size: compact ? 10.5 : 11.5, weight: .semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, compact ? 8 : 10)
+            .padding(.vertical, compact ? 3 : 4)
+            .background(Capsule().fill(color.opacity(0.13)))
+            .overlay(Capsule().strokeBorder(color.opacity(0.3), lineWidth: 1))
     }
 }

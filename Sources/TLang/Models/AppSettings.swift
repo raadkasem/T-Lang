@@ -19,6 +19,7 @@ final class AppSettings: ObservableObject {
         static let saveHistory = "saveHistory"
         static let hideDockIcon = "hideDockIcon"
         static let launchAtLogin = "launchAtLogin"
+        static let appearance = "appearanceMode"
     }
 
     private let defaults = UserDefaults.standard
@@ -64,6 +65,9 @@ final class AppSettings: ObservableObject {
         }
     }
     @Published var launchAtLoginError: String?
+    @Published var appearance: AppearanceMode {
+        didSet { defaults.set(appearance.rawValue, forKey: K.appearance) }
+    }
 
     private init() {
         let d = UserDefaults.standard
@@ -79,6 +83,7 @@ final class AppSettings: ObservableObject {
         saveHistory = Self.bool(d, K.saveHistory, default: true)
         hideDockIcon = Self.bool(d, K.hideDockIcon, default: false)
         launchAtLogin = Self.bool(d, K.launchAtLogin, default: false)
+        appearance = AppearanceMode(rawValue: d.string(forKey: K.appearance) ?? "") ?? .system
     }
 
     private static func bool(_ d: UserDefaults, _ key: String, default def: Bool) -> Bool {

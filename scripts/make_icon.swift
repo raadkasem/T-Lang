@@ -26,39 +26,82 @@ func drawIcon(pixels: CGFloat) -> NSBitmapImageRep? {
     let s = pixels
     let inset = s * 0.09
     let box = NSRect(x: inset, y: inset, width: s - inset * 2, height: s - inset * 2)
-    let path = NSBezierPath(roundedRect: box, xRadius: s * 0.2, yRadius: s * 0.2)
-    let gradient = NSGradient(
+    let path = NSBezierPath(roundedRect: box, xRadius: s * 0.21, yRadius: s * 0.21)
+
+    // Lapis & Gold: deep manuscript-night ground.
+    let ground = NSGradient(
         colors: [
-            NSColor(calibratedRed: 0.31, green: 0.27, blue: 0.92, alpha: 1.0),
-            NSColor(calibratedRed: 0.13, green: 0.62, blue: 0.95, alpha: 1.0),
+            NSColor(srgbRed: 0.10, green: 0.13, blue: 0.32, alpha: 1.0),
+            NSColor(srgbRed: 0.043, green: 0.055, blue: 0.10, alpha: 1.0),
         ]
     )
-    gradient?.draw(in: path, angle: -65)
+    ground?.draw(in: path, angle: -90)
+
+    // Soft lapis glow top-left, faint gold dawn bottom-right.
+    NSGraphicsContext.current?.saveGraphicsState()
+    path.addClip()
+    let lapisGlow = NSGradient(
+        colors: [
+            NSColor(srgbRed: 0.24, green: 0.33, blue: 0.91, alpha: 0.55),
+            NSColor(srgbRed: 0.24, green: 0.33, blue: 0.91, alpha: 0.0),
+        ]
+    )
+    lapisGlow?.draw(
+        fromCenter: NSPoint(x: s * 0.2, y: s * 0.85), radius: 0,
+        toCenter: NSPoint(x: s * 0.2, y: s * 0.85), radius: s * 0.7,
+        options: []
+    )
+    let goldGlow = NSGradient(
+        colors: [
+            NSColor(srgbRed: 0.91, green: 0.73, blue: 0.29, alpha: 0.34),
+            NSColor(srgbRed: 0.91, green: 0.73, blue: 0.29, alpha: 0.0),
+        ]
+    )
+    goldGlow?.draw(
+        fromCenter: NSPoint(x: s * 0.85, y: s * 0.15), radius: 0,
+        toCenter: NSPoint(x: s * 0.85, y: s * 0.15), radius: s * 0.65,
+        options: []
+    )
+    NSGraphicsContext.current?.restoreGraphicsState()
+
+    // Inner hairline ring, like gold-leaf tooling on a book cover.
+    let ringInset = s * 0.135
+    let ring = NSBezierPath(
+        roundedRect: NSRect(x: ringInset, y: ringInset, width: s - ringInset * 2, height: s - ringInset * 2),
+        xRadius: s * 0.165, yRadius: s * 0.165
+    )
+    ring.lineWidth = max(1, s * 0.008)
+    NSColor(srgbRed: 0.91, green: 0.73, blue: 0.29, alpha: 0.45).setStroke()
+    ring.stroke()
 
     let paragraph = NSMutableParagraphStyle()
     paragraph.alignment = .center
     paragraph.baseWritingDirection = .leftToRight
 
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.25)
-    shadow.shadowBlurRadius = s * 0.02
-    shadow.shadowOffset = NSSize(width: 0, height: -s * 0.01)
+    func glyph(_ string: String, color: NSColor, size fontSize: CGFloat) -> NSAttributedString {
+        let shadow = NSShadow()
+        shadow.shadowColor = color.withAlphaComponent(0.55)
+        shadow.shadowBlurRadius = s * 0.045
+        return NSAttributedString(string: string, attributes: [
+            .font: NSFont.systemFont(ofSize: fontSize, weight: .bold),
+            .foregroundColor: color,
+            .paragraphStyle: paragraph,
+            .shadow: shadow,
+        ])
+    }
 
-    let attrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: s * 0.40, weight: .bold),
-        .foregroundColor: NSColor.white,
-        .paragraphStyle: paragraph,
-        .shadow: shadow,
-    ]
-    let text = NSAttributedString(string: "A ع", attributes: attrs)
-    let size = text.size()
-    let textRect = NSRect(
-        x: (s - size.width) / 2,
-        y: (s - size.height) / 2 - s * 0.01,
-        width: size.width,
-        height: size.height
-    )
-    text.draw(in: textRect)
+    // "A" in lapis (English), "ع" in gold (Arabic) — the two language identities.
+    let lapis = NSColor(srgbRed: 0.50, green: 0.59, blue: 1.0, alpha: 1.0)
+    let gold = NSColor(srgbRed: 0.93, green: 0.75, blue: 0.32, alpha: 1.0)
+    let a = glyph("A", color: lapis, size: s * 0.36)
+    let ain = glyph("ع", color: gold, size: s * 0.38)
+    let aSize = a.size()
+    let ainSize = ain.size()
+    let gap = s * 0.015
+    let totalWidth = aSize.width + gap + ainSize.width
+    let baselineY = (s - max(aSize.height, ainSize.height)) / 2
+    a.draw(at: NSPoint(x: (s - totalWidth) / 2, y: baselineY + s * 0.012))
+    ain.draw(at: NSPoint(x: (s - totalWidth) / 2 + aSize.width + gap, y: baselineY))
 
     NSGraphicsContext.restoreGraphicsState()
     return rep

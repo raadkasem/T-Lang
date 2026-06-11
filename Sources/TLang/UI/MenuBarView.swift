@@ -6,87 +6,72 @@ struct MenuBarView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 10) {
-            header
+        ZStack {
+            AppBackground()
+            VStack(spacing: 10) {
+                header
 
-            EditorCard(
-                title: vm.direction.sourceName,
-                text: $vm.sourceText,
-                isRTL: vm.direction.sourceIsRTL,
-                placeholder: "Type, paste, or copy text anywhere",
-                onClear: { vm.clear() }
-            )
-            .frame(height: 110)
+                EditorCard(
+                    title: vm.direction.sourceName,
+                    accent: Theme.languageColor(isArabic: vm.direction == .arToEn),
+                    text: $vm.sourceText,
+                    isRTL: vm.direction.sourceIsRTL,
+                    placeholder: "Type, paste, or copy text anywhere",
+                    onClear: { vm.clear() }
+                )
+                .frame(height: 108)
 
-            HStack {
-                DirectionPill(direction: vm.direction)
-                Spacer()
-                Button {
-                    vm.swap()
-                } label: {
-                    Image(systemName: "arrow.left.arrow.right")
-                        .font(.system(size: 10, weight: .semibold))
+                HStack {
+                    DirectionPill(direction: vm.direction, compact: true)
+                    Spacer()
+                    SwapButton(disabled: vm.outputText.isEmpty) {
+                        vm.swap()
+                    }
+                    .scaleEffect(0.8)
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("Swap")
-                .disabled(vm.outputText.isEmpty)
+
+                OutputCard(vm: vm)
+                    .frame(minHeight: 128)
+
+                footer
             }
-
-            OutputCard(vm: vm)
-                .frame(minHeight: 130)
-
-            footer
+            .padding(12)
         }
-        .padding(12)
-        .frame(width: 360, height: 420)
+        .frame(width: 360, height: 430)
+        .tint(Theme.lapis)
     }
 
     private var header: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
+            LogoMark(size: 20)
             Text("TLang")
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(Theme.textPrimary)
             Spacer()
-            Button {
+            IconButton(systemImage: "macwindow", help: "Open main window") {
                 dismiss()
                 AppDelegate.shared?.openMainWindow()
-            } label: {
-                Image(systemName: "macwindow")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Open main window")
-            Button {
+            IconButton(systemImage: "gearshape", help: "Settings") {
                 dismiss()
                 AppDelegate.shared?.openSettingsWindow()
-            } label: {
-                Image(systemName: "gearshape")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Settings")
-            Button {
+            IconButton(systemImage: "power", help: "Quit TLang") {
                 NSApp.terminate(nil)
-            } label: {
-                Image(systemName: "power")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .help("Quit TLang")
         }
-        .font(.system(size: 12))
     }
 
     private var footer: some View {
         HStack {
             Toggle("Clipboard", isOn: $settings.clipboardWatcher)
-                .toggleStyle(.switch)
-                .controlSize(.mini)
+                .toggleStyle(PillToggleStyle(tint: Theme.gold))
                 .help("Auto-translate copied text")
             Spacer()
             if let error = vm.errorMessage {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.coral)
                     .help(error)
             }
             if vm.isTranslating {
@@ -94,18 +79,15 @@ struct MenuBarView: View {
                     vm.stop()
                 }
                 .keyboardShortcut(".", modifiers: .command)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                .buttonStyle(DangerButtonStyle())
             } else {
                 Button("Translate") {
                     vm.translateNow()
                 }
                 .keyboardShortcut(.return, modifiers: .command)
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
+                .buttonStyle(GradientButtonStyle())
                 .disabled(vm.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .font(.system(size: 11))
     }
 }

@@ -155,12 +155,13 @@ struct FloatingPanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                DirectionPill(direction: vm.direction)
+                LogoMark(size: 18)
+                DirectionPill(direction: vm.direction, compact: true)
                 if vm.isTranslating {
                     if vm.isThinkingPhase {
                         Text("thinking…")
                             .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Theme.textTertiary)
                     }
                     StreamingIndicator()
                 }
@@ -170,40 +171,47 @@ struct FloatingPanelView: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Theme.textTertiary)
                 }
                 .buttonStyle(.plain)
                 .help("Close (Esc)")
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 8)
+            .padding(.horizontal, 13)
+            .padding(.top, 11)
+            .padding(.bottom, 9)
 
-            Divider().opacity(0.5)
+            Rectangle()
+                .fill(Theme.stroke)
+                .frame(height: 1)
+                .padding(.horizontal, 13)
 
             ScrollView {
                 Group {
                     if let error = vm.errorMessage {
                         Label(error, systemImage: "exclamationmark.triangle.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Theme.coral)
                     } else if vm.outputText.isEmpty && vm.isTranslating {
                         Text("Translating…")
                             .font(.system(size: 13))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(Theme.textTertiary)
                     } else {
                         Text(vm.outputText)
                             .font(.system(size: 14))
                             .lineSpacing(3)
+                            .foregroundStyle(Theme.textPrimary)
                             .textSelection(.enabled)
                             .multilineTextAlignment(isRTL ? .trailing : .leading)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)
-                .padding(12)
+                .padding(13)
             }
 
-            Divider().opacity(0.5)
+            Rectangle()
+                .fill(Theme.stroke)
+                .frame(height: 1)
+                .padding(.horizontal, 13)
 
             HStack(spacing: 8) {
                 CopyButton(text: vm.outputText)
@@ -213,8 +221,7 @@ struct FloatingPanelView: View {
                 } label: {
                     Label("Replace", systemImage: "arrow.uturn.backward.square")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .buttonStyle(GhostButtonStyle(tint: Theme.gold))
                 .help("Paste the translation over the original selection")
                 .disabled(vm.outputText.isEmpty)
                 Spacer()
@@ -223,21 +230,32 @@ struct FloatingPanelView: View {
                 } label: {
                     Label("Open in TLang", systemImage: "macwindow")
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                .buttonStyle(GhostButtonStyle())
             }
-            .font(.system(size: 11))
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 13)
             .padding(.vertical, 10)
         }
         .frame(width: 420, height: 280)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-        )
+        .modifier(PanelChrome())
+        .tint(Theme.lapis)
+    }
+}
+
+/// Panel surface: Liquid Glass on macOS 26+, translucent ink/paper otherwise.
+private struct PanelChrome: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+        if #available(macOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: shape)
+                .overlay(shape.strokeBorder(Theme.borderGradient, lineWidth: 1))
+                .shadow(color: .black.opacity(0.3), radius: 22, y: 8)
+        } else {
+            content
+                .background(shape.fill(Theme.ink.opacity(0.98)))
+                .overlay(shape.strokeBorder(Theme.borderGradient, lineWidth: 1))
+                .shadow(color: .black.opacity(0.4), radius: 22, y: 8)
+        }
     }
 }

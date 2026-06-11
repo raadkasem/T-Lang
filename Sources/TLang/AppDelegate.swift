@@ -12,6 +12,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appMainMenu: NSMenu?
     private var editShortcutMonitor: Any?
 
+    /// Window chrome matching Theme.background in each appearance.
+    static let inkWindowColor = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0x16 / 255, green: 0x1B / 255, blue: 0x2C / 255, alpha: 1)
+            : NSColor(srgbRed: 0xF4 / 255, green: 0xF5 / 255, blue: 0xFA / 255, alpha: 1)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
         installMainMenu()
@@ -97,6 +104,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        settings.$appearance
+            .sink { mode in
+                Task { @MainActor in
+                    NSApp.appearance = mode.nsAppearance
+                }
+            }
+            .store(in: &cancellables)
+
         settings.$hideDockIcon
             .dropFirst()
             .sink { _ in
@@ -125,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
             window.isMovableByWindowBackground = true
+            window.backgroundColor = Self.inkWindowColor
             window.minSize = NSSize(width: 720, height: 440)
             window.isReleasedWhenClosed = false
             window.center()
@@ -143,12 +159,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func openSettingsWindow() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-                styleMask: [.titled, .closable],
+                contentRect: NSRect(x: 0, y: 0, width: 560, height: 560),
+                styleMask: [.titled, .closable, .fullSizeContentView],
                 backing: .buffered,
                 defer: false
             )
             window.title = "TLang Settings"
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = true
+            window.isMovableByWindowBackground = true
+            window.backgroundColor = Self.inkWindowColor
             window.isReleasedWhenClosed = false
             window.center()
             window.contentView = NSHostingView(
