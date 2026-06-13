@@ -39,6 +39,8 @@ and translation is the gradient between them. Full light & dark mode
   never leaves your Mac; can be disabled).
 - **Thinking disabled** — reasoning models are told not to "think", using the
   correct knob per provider; inline `<think>` blocks are stripped as a fallback.
+- **Auto-updates** — TLang checks GitHub Releases and installs new versions in
+  place (signed with Sparkle/EdDSA). Toggle in Settings, or *Check for Updates…*.
 - **Launch at login**, API key in the **Keychain**, streaming responses.
 
 ## Build
@@ -104,6 +106,25 @@ Sources/TLang/
 ├── ViewModels/               # translation state machine (debounce, streaming)
 └── UI/                       # main window, menu bar, settings, floating panel
 ```
+
+## Releasing (maintainers)
+
+Releases are fully automated by [`.github/workflows/release.yml`](.github/workflows/release.yml).
+To cut a release:
+
+1. Bump `CFBundleShortVersionString` **and** `CFBundleVersion` in `Resources/Info.plist`
+   (Sparkle compares `CFBundleVersion`, so it must increase every release), and the
+   version string in the About tab.
+2. Commit, then tag and push:
+   ```bash
+   git tag v1.5.0 && git push origin v1.5.0
+   ```
+3. CI builds the app, packages a `.zip` + `.dmg`, EdDSA-signs the update, generates a
+   signed `appcast.xml`, and publishes the GitHub Release. Existing users auto-update.
+
+The EdDSA **private** signing key lives in the macOS Keychain (and a gitignored
+`sparkle_private_key.pem` backup) and in the `SPARKLE_PRIVATE_KEY` repo secret used by CI.
+The matching public key is `SUPublicEDKey` in `Info.plist`. Never commit the private key.
 
 ## License
 
