@@ -231,7 +231,11 @@ struct OutputCard: View {
                     .foregroundStyle(accent.opacity(0.95))
                 Spacer()
                 if vm.isTranslating {
-                    if vm.isThinkingPhase {
+                    if vm.retryAttempt > 0 {
+                        Text("retrying…")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.coral)
+                    } else if vm.isThinkingPhase {
                         Text("thinking…")
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textTertiary)

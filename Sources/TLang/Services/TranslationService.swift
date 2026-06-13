@@ -172,45 +172,124 @@ final class TranslationService: @unchecked Sendable {
         """
     }
 
-    /// Streams translated text chunks from an OpenAI-compatible chat-completions endpoint.
-    func stream(text: String, direction: Direction, config: Config) -> AsyncThrowingStream<String, Error> {
+    private static let maxAttempts = 3
+
+    /// Streams translated text chunks from an OpenAI-compatible chat-completions
+    /// endpoint. Transient connection/5xx failures are retried with exponential
+    /// backoff — but only before the first token is emitted, so a mid-stream drop
+    /// never duplicates output. `onRetry` reports the attempt number (1-based).
+    func stream(
+        text: String,
+        direction: Direction,
+        config: Config,
+        onRetry: (@Sendable (Int) -> Void)? = nil
+    ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
+                var yieldedAny = false
                 do {
                     let request = try Self.makeRequest(text: text, direction: direction, config: config)
-                    let (bytes, response) = try await self.session.bytes(for: request)
-                    guard let http = response as? HTTPURLResponse else {
-                        throw TranslationError.badResponse
-                    }
-                    guard http.statusCode == 200 else {
-                        var data = Data()
-                        for try await byte in bytes {
-                            data.append(byte)
-                            if data.count > 8192 { break }
+                    var attempt = 0
+                    while true {
+                        attempt += 1
+                        do {
+                            let (bytes, response) = try await self.session.bytes(for: request)
+                            guard let http = response as? HTTPURLResponse else {
+                                throw TranslationError.badResponse
+                            }
+                            guard http.statusCode == 200 else {
+                                var data = Data()
+                                for try await byte in bytes {
+                                    data.append(byte)
+                                    if data.count > 8192 { break }
+                                }
+                                if Self.isRetryable(status: http.statusCode), attempt < Self.maxAttempts {
+                                    onRetry?(attempt)
+                                    try await Self.backoff(attempt)
+                                    continue
+                                }
+                                throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+                            }
+                            for try await line in bytes.lines {
+                                try Task.checkCancellation()
+                                guard line.hasPrefix("data:") else { continue }
+                                let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                                if payload == "[DONE]" { break }
+                                guard let data = payload.data(using: .utf8),
+                                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                      let choices = obj["choices"] as? [[String: Any]],
+                                      let delta = choices.first?["delta"] as? [String: Any],
+                                      let piece = delta["content"] as? String,
+                                      !piece.isEmpty
+                                else { continue }
+                                yieldedAny = true
+                                continuation.yield(piece)
+                            }
+                            continuation.finish()
+                            return
+                        } catch let urlError as URLError {
+                            // Retry only if nothing was emitted yet.
+                            if !yieldedAny, Self.isRetryable(urlError), attempt < Self.maxAttempts {
+                                onRetry?(attempt)
+                                try await Self.backoff(attempt)
+                                continue
+                            }
+                            throw urlError
                         }
-                        throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
                     }
-                    for try await line in bytes.lines {
-                        try Task.checkCancellation()
-                        guard line.hasPrefix("data:") else { continue }
-                        let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                        if payload == "[DONE]" { break }
-                        guard let data = payload.data(using: .utf8),
-                              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                              let choices = obj["choices"] as? [[String: Any]],
-                              let delta = choices.first?["delta"] as? [String: Any],
-                              let piece = delta["content"] as? String,
-                              !piece.isEmpty
-                        else { continue }
-                        continuation.yield(piece)
-                    }
-                    continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    /// Fetches available model IDs from the OpenAI-compatible `/models` endpoint.
+    func fetchModels(baseURL: String, apiKey: String) async throws -> [String] {
+        let base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { throw TranslationError.missingBaseURL }
+        var urlString = base
+        while urlString.hasSuffix("/") { urlString.removeLast() }
+        guard let url = URL(string: urlString + "/models"), url.scheme != nil else {
+            throw TranslationError.badURL
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 12
+        if !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw TranslationError.badResponse }
+        guard http.statusCode == 200 else {
+            throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let arr = obj["data"] as? [[String: Any]]
+        else { throw TranslationError.badResponse }
+        return arr
+            .compactMap { $0["id"] as? String }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    private static func isRetryable(status: Int) -> Bool {
+        status == 408 || status == 429 || (500...599).contains(status)
+    }
+
+    private static func isRetryable(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .cannotConnectToHost, .cannotFindHost,
+             .networkConnectionLost, .dnsLookupFailed:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Exponential backoff: ~0.5s, 1s, 2s … capped at 4s.
+    private static func backoff(_ attempt: Int) async throws {
+        let seconds = min(0.5 * pow(2, Double(attempt - 1)), 4.0)
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
     /// Non-streaming convenience used by the settings "Test" button.

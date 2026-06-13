@@ -129,6 +129,126 @@ private struct ThemedField: View {
     }
 }
 
+/// Model field plus a "browse" button that lists models from /v1/models.
+/// Free-text entry still works for endpoints that don't support listing.
+private struct ModelPickerField: View {
+    @EnvironmentObject var settings: AppSettings
+    @State private var models: [String] = []
+    @State private var loading = false
+    @State private var error: String?
+    @State private var showList = false
+    @State private var filter = ""
+
+    private var filtered: [String] {
+        let q = filter.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return models }
+        return models.filter { $0.localizedCaseInsensitiveContains(q) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .bottom, spacing: 8) {
+                ThemedField(label: "Model", text: $settings.model, prompt: "e.g. gpt-4.1-mini, qwen3:8b")
+                Button {
+                    fetch()
+                } label: {
+                    Group {
+                        if loading {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "list.bullet")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.textSecondary)
+                        }
+                    }
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(Theme.field))
+                    .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Theme.stroke, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(loading)
+                .help("Browse models from the server")
+                .popover(isPresented: $showList, arrowEdge: .bottom) { listPopover }
+            }
+            if let error {
+                Text(error)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.coral)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private var listPopover: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+                TextField("Filter \(models.count) models", text: $filter)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+            }
+            .padding(8)
+            Divider()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 1) {
+                    ForEach(filtered, id: \.self) { model in
+                        Button {
+                            settings.model = model
+                            showList = false
+                        } label: {
+                            HStack {
+                                Text(model)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundStyle(Theme.textPrimary)
+                                    .lineLimit(1)
+                                Spacer()
+                                if model == settings.model {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(Theme.lapis)
+                                }
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(4)
+            }
+        }
+        .frame(width: 300, height: 340)
+    }
+
+    private func fetch() {
+        loading = true
+        error = nil
+        filter = ""
+        let base = settings.baseURL
+        let key = settings.apiKey
+        Task {
+            do {
+                let list = try await TranslationService.shared.fetchModels(baseURL: base, apiKey: key)
+                models = list
+                loading = false
+                if list.isEmpty {
+                    error = "The server returned no models."
+                } else {
+                    showList = true
+                }
+            } catch {
+                loading = false
+                let message = (error as? TranslationError)?.errorDescription ?? error.localizedDescription
+                self.error = "Couldn't list models — type it manually. (\(message))"
+            }
+        }
+    }
+}
+
 // MARK: - Provider
 
 private struct ProviderSettingsTab: View {
@@ -192,7 +312,7 @@ private struct ProviderSettingsTab: View {
                         .help(showKey ? "Hide key" : "Show key")
                     }
 
-                    ThemedField(label: "Model", text: $settings.model, prompt: "e.g. gpt-4.1-mini, qwen3:8b")
+                    ModelPickerField()
                 }
 
                 SettingsCard(
@@ -418,7 +538,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Version 1.4.0")
+            Text("Version 1.5.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)

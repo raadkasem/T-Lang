@@ -14,6 +14,7 @@ final class TranslatorViewModel: ObservableObject {
     @Published var outputText = ""
     @Published var isTranslating = false
     @Published var isThinkingPhase = false
+    @Published var retryAttempt = 0
     @Published var errorMessage: String?
     @Published var direction: Direction = .enToAr
 
@@ -65,16 +66,25 @@ final class TranslatorViewModel: ObservableObject {
         direction = dir
         isTranslating = true
         isThinkingPhase = false
+        retryAttempt = 0
         errorMessage = nil
         outputText = ""
         let config = TranslationService.currentConfig()
+
+        let onRetry: @Sendable (Int) -> Void = { [weak self] attempt in
+            Task { @MainActor in
+                guard let self, self.generation == gen else { return }
+                self.retryAttempt = attempt
+            }
+        }
 
         translateTask = Task { [weak self] in
             var raw = ""
             var lastUIUpdate = ContinuousClock.now
             do {
-                for try await piece in TranslationService.shared.stream(text: text, direction: dir, config: config) {
+                for try await piece in TranslationService.shared.stream(text: text, direction: dir, config: config, onRetry: onRetry) {
                     guard let self, self.generation == gen else { return }
+                    if self.retryAttempt != 0 { self.retryAttempt = 0 }
                     raw += piece
                     // Throttle @Published writes — re-rendering on every token
                     // makes the whole app stutter during streaming.
@@ -90,6 +100,7 @@ final class TranslatorViewModel: ObservableObject {
                 self.outputText = final
                 self.isTranslating = false
                 self.isThinkingPhase = false
+                self.retryAttempt = 0
                 if !final.isEmpty {
                     HistoryStore.shared.add(source: text, translation: final, direction: dir)
                 }
@@ -101,6 +112,7 @@ final class TranslatorViewModel: ObservableObject {
                 self.errorMessage = Self.friendlyMessage(for: error)
                 self.isTranslating = false
                 self.isThinkingPhase = false
+                self.retryAttempt = 0
             }
         }
     }
@@ -111,6 +123,7 @@ final class TranslatorViewModel: ObservableObject {
         debounceTask?.cancel()
         isTranslating = false
         isThinkingPhase = false
+        retryAttempt = 0
     }
 
     func swap() {
