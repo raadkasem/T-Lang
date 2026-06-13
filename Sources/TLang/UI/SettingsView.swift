@@ -268,6 +268,7 @@ private struct ProviderSettingsTab: View {
 private struct BehaviorSettingsTab: View {
     @EnvironmentObject var settings: AppSettings
     @EnvironmentObject var history: HistoryStore
+    @ObservedObject private var updater = UpdaterController.shared
     @State private var accessibilityGranted = Permissions.accessibilityGranted
 
     private let permissionTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
@@ -372,6 +373,28 @@ private struct BehaviorSettingsTab: View {
                     Toggle("Hide Dock icon (menu bar only)", isOn: $settings.hideDockIcon)
                         .toggleStyle(PillToggleStyle())
                 }
+
+                SettingsCard(
+                    title: "Updates",
+                    footer: "TLang checks GitHub Releases for new versions and installs them in place."
+                ) {
+                    Toggle("Automatically check for updates", isOn: Binding(
+                        get: { updater.automaticallyChecks },
+                        set: { updater.setAutomaticallyChecks($0) }
+                    ))
+                    .toggleStyle(PillToggleStyle())
+                    HStack {
+                        Text("Version \(updater.currentVersion)")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textTertiary)
+                        Spacer()
+                        Button("Check Now") {
+                            updater.checkForUpdates()
+                        }
+                        .buttonStyle(GhostButtonStyle())
+                        .disabled(!updater.canCheckForUpdates)
+                    }
+                }
             }
         }
         .scrollIndicators(.never)
@@ -395,7 +418,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Version 1.3.0")
+            Text("Version 1.4.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)

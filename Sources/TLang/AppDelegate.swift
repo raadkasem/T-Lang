@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Sparkle
 import SwiftUI
 
 @MainActor
@@ -31,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         applyActivationPolicy()
         wireServices()
+        _ = UpdaterController.shared
         openMainWindow()
         runScreenshotModeIfRequested()
     }
@@ -263,6 +265,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
             keyEquivalent: ""
         )
+        appMenu.addItem(.separator())
+        let updatesItem = NSMenuItem(
+            title: "Check for Updates…",
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        updatesItem.target = UpdaterController.shared.controller
+        appMenu.addItem(updatesItem)
         appMenu.addItem(.separator())
         let settingsItem = NSMenuItem(
             title: "Settings…",

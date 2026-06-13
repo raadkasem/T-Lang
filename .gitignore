@@ -4,3 +4,7 @@ build/
 Resources/AppIcon.iconset/
 *.xcodeproj
 .swiftpm/
+
+# Sparkle EdDSA private signing key — NEVER commit this
+sparkle_private_key.pem
+*.pem
