@@ -40,13 +40,15 @@ The interface is fully localized into Arabic with right-to-left layout
 - **Text-to-speech** — speaker icon on every pane reads the text aloud with the
   best installed system voice for each language (offline, free).
 - **Dictation** — mic button transcribes speech into the source pane (Arabic or
-  English), using on-device speech recognition.
+  English) with on-device speech recognition; the mic glows red and pulses while
+  it's listening.
 - **Model picker** — browse and pick models straight from the provider's
   `/v1/models`, with free-text fallback.
 - **Alternative translations** — get 2–3 alternative phrasings for short text and
   page between them.
-- **Arabic UI** — the whole interface localizes into Arabic with full RTL layout
-  (Auto / English / العربية).
+- **Arabic UI** — the whole interface localizes into Arabic with full RTL layout.
+  Switch languages with the 🇬🇧 / 🇸🇦 flags in the window header, or pick
+  Auto / English / العربية in Settings.
 - **Resilient** — transient network/5xx errors retry with exponential backoff.
 - **Local history** — translations are saved to
   `~/Library/Application Support/TLang/history.json` (searchable, pinnable,
@@ -104,9 +106,14 @@ Accessibility after a rebuild (remove and re-add TLang in the list).
 | Translate | type/paste — auto-translates as you type (or ⌘↩) |
 | Stop a translation | ⌘. or the Stop button |
 | Translate any copied text | just copy it while TLang is running |
+| Dictate | the mic icon on the source pane — speak, then it transcribes & translates |
+| Hear it spoken | the speaker icon on either pane |
+| Alternative phrasings | the *Alternatives* button under a short translation |
 | Floating translator | hold ⌘, tap C twice on a selection in any app |
 | Replace selection with translation | enable *Replace in place*, then double ⌘C |
 | Back-translate | the ⇄ swap button |
+| Switch UI language | the 🇬🇧 / 🇸🇦 flags in the window header |
+| Light / dark | the sun-moon icon in the header (or Settings) |
 | History | clock icon in the main window — search, pin, click to reload |
 
 ## Project layout
