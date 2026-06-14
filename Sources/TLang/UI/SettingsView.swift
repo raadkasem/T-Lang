@@ -16,6 +16,7 @@ struct SettingsView: View {
     }
 
     @State private var tab: Tab = .provider
+    @EnvironmentObject var settings: AppSettings
 
     var body: some View {
         ZStack {
@@ -37,6 +38,7 @@ struct SettingsView: View {
         }
         .frame(width: 560, height: 560)
         .tint(Theme.lapis)
+        .environment(\.layoutDirection, settings.uiLayoutDirection)
     }
 
     private var tabBar: some View {
@@ -46,7 +48,7 @@ struct SettingsView: View {
                 Button {
                     tab = item
                 } label: {
-                    Label(item.rawValue, systemImage: item.icon)
+                    Label(settings.tr(item.rawValue), systemImage: item.icon)
                         .font(.system(size: 12, weight: selected ? .semibold : .medium))
                         .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
                         .padding(.horizontal, 14)
@@ -70,16 +72,17 @@ struct SettingsView: View {
 // MARK: - Building blocks
 
 private struct SettingsCard<Content: View>: View {
+    @EnvironmentObject var settings: AppSettings
     let title: String
     var footer: String?
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            UppercaseLabel(title)
+            UppercaseLabel(settings.tr(title))
             content
             if let footer {
-                Text(footer)
+                Text(settings.tr(footer))
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.textTertiary)
                     .lineSpacing(2)
@@ -148,7 +151,7 @@ private struct ModelPickerField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .bottom, spacing: 8) {
-                ThemedField(label: "Model", text: $settings.model, prompt: "e.g. gpt-4.1-mini, qwen3:8b")
+                ThemedField(label: settings.tr("Model"), text: $settings.model, prompt: "e.g. gpt-4.1-mini, qwen3:8b")
                 Button {
                     fetch()
                 } label: {
@@ -167,7 +170,7 @@ private struct ModelPickerField: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(loading)
-                .help("Browse models from the server")
+                .help(settings.tr("Browse models from the server"))
                 .popover(isPresented: $showList, arrowEdge: .bottom) { listPopover }
             }
             if let error {
@@ -272,7 +275,7 @@ private struct ProviderSettingsTab: View {
                     footer: "The API key is stored in the macOS Keychain. Local servers (Ollama, LM Studio, vLLM) don't need a key."
                 ) {
                     HStack {
-                        Text("Provider")
+                        Text(settings.tr("Provider"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textSecondary)
                         Spacer()
@@ -289,11 +292,11 @@ private struct ProviderSettingsTab: View {
                         }
                     }
 
-                    ThemedField(label: "Base URL", text: $settings.baseURL, prompt: "https://api.openai.com/v1")
+                    ThemedField(label: settings.tr("Base URL"), text: $settings.baseURL, prompt: "https://api.openai.com/v1")
 
                     HStack(alignment: .bottom, spacing: 8) {
                         ThemedField(
-                            label: "API Key",
+                            label: settings.tr("API Key"),
                             text: $settings.apiKey,
                             prompt: settings.provider.needsAPIKey ? "sk-…" : "not required for local servers",
                             secure: !showKey
@@ -319,7 +322,7 @@ private struct ProviderSettingsTab: View {
                     title: "Reasoning",
                     footer: "Sends the right knob per provider — OpenAI: reasoning_effort · OpenRouter: reasoning.enabled=false · Ollama: think=false · vLLM: chat_template_kwargs. Inline <think> blocks are always stripped as a fallback."
                 ) {
-                    Toggle("Disable model thinking / reasoning", isOn: $settings.disableThinking)
+                    Toggle(settings.tr("Disable model thinking / reasoning"), isOn: $settings.disableThinking)
                         .toggleStyle(PillToggleStyle(tint: Theme.gold))
                 }
 
@@ -331,10 +334,10 @@ private struct ProviderSettingsTab: View {
                             if testState == .testing {
                                 HStack(spacing: 6) {
                                     ProgressView().controlSize(.small)
-                                    Text("Testing…")
+                                    Text(settings.tr("Testing…"))
                                 }
                             } else {
-                                Text("Test Connection")
+                                Text(settings.tr("Test Connection"))
                             }
                         }
                         .buttonStyle(GhostButtonStyle())
@@ -397,9 +400,9 @@ private struct BehaviorSettingsTab: View {
         ScrollView {
             VStack(spacing: 12) {
                 SettingsCard(title: "Translation") {
-                    Toggle("Auto-translate while typing", isOn: $settings.autoTranslate)
+                    Toggle(settings.tr("Auto-translate while typing"), isOn: $settings.autoTranslate)
                         .toggleStyle(PillToggleStyle())
-                    Toggle("Watch clipboard and translate copied text", isOn: $settings.clipboardWatcher)
+                    Toggle(settings.tr("Watch clipboard and translate copied text"), isOn: $settings.clipboardWatcher)
                         .toggleStyle(PillToggleStyle(tint: Theme.gold))
                 }
 
@@ -407,9 +410,9 @@ private struct BehaviorSettingsTab: View {
                     title: "Hotkey",
                     footer: "Hold ⌘ and tap C twice quickly on selected text in any app — a floating translation appears near the cursor. With “Replace in place” on, the translation is pasted over the original selection."
                 ) {
-                    Toggle("Double ⌘C hotkey", isOn: $settings.hotkeyEnabled)
+                    Toggle(settings.tr("Double ⌘C hotkey"), isOn: $settings.hotkeyEnabled)
                         .toggleStyle(PillToggleStyle())
-                    Toggle("Replace in place", isOn: $settings.replaceInPlace)
+                    Toggle(settings.tr("Replace in place"), isOn: $settings.replaceInPlace)
                         .toggleStyle(PillToggleStyle(tint: Theme.gold))
                 }
 
@@ -419,14 +422,14 @@ private struct BehaviorSettingsTab: View {
                             .fill(accessibilityGranted ? Theme.green : Theme.gold)
                             .frame(width: 7, height: 7)
                             .shadow(color: (accessibilityGranted ? Theme.green : Theme.gold).opacity(0.6), radius: 3)
-                        Text(accessibilityGranted
+                        Text(settings.tr(accessibilityGranted
                              ? "Accessibility access granted"
-                             : "Accessibility access required for the hotkey and replace-in-place")
+                             : "Accessibility access required for the hotkey and replace-in-place"))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
                         Spacer()
                         if !accessibilityGranted {
-                            Button("Grant…") {
+                            Button(settings.tr("Grant…")) {
                                 Permissions.requestAccessibility()
                                 Permissions.openAccessibilitySettings()
                             }
@@ -439,14 +442,14 @@ private struct BehaviorSettingsTab: View {
                     title: "History",
                     footer: "History is saved to ~/Library/Application Support/TLang/history.json and never leaves this Mac."
                 ) {
-                    Toggle("Save translation history", isOn: $settings.saveHistory)
+                    Toggle(settings.tr("Save translation history"), isOn: $settings.saveHistory)
                         .toggleStyle(PillToggleStyle())
                     HStack {
-                        Text("\(history.entries.count) entries stored locally")
+                        Text("\(history.entries.count) " + settings.tr("entries stored locally"))
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.textTertiary)
                         Spacer()
-                        Button("Clear History…") {
+                        Button(settings.tr("Clear History…")) {
                             history.clearAll(keepPinned: false)
                         }
                         .buttonStyle(GhostButtonStyle(tint: Theme.coral))
@@ -456,41 +459,46 @@ private struct BehaviorSettingsTab: View {
 
                 SettingsCard(title: "App") {
                     HStack {
-                        Text("Appearance")
+                        Text(settings.tr("Appearance"))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textSecondary)
                         Spacer()
                         HStack(spacing: 4) {
                             ForEach(AppearanceMode.allCases) { mode in
-                                let selected = settings.appearance == mode
-                                Button {
+                                segbutton(settings.tr(mode.label), icon: mode.icon, selected: settings.appearance == mode) {
                                     settings.appearance = mode
-                                } label: {
-                                    Label(mode.label, systemImage: mode.icon)
-                                        .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
-                                        .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 5)
-                                        .background(Capsule().fill(selected ? Theme.cardHover : .clear))
-                                        .overlay(
-                                            Capsule().strokeBorder(selected ? Theme.strokeStrong : .clear, lineWidth: 1)
-                                        )
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                         .padding(3)
                         .background(Capsule().fill(Theme.field))
                         .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
                     }
-                    Toggle("Launch at login", isOn: $settings.launchAtLogin)
+                    HStack {
+                        Text(settings.tr("UI Language"))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer()
+                        HStack(spacing: 4) {
+                            ForEach(AppLanguage.allCases) { lang in
+                                segbutton(lang == .system ? settings.tr(lang.label) : lang.label,
+                                          icon: nil, selected: settings.uiLanguage == lang) {
+                                    settings.uiLanguage = lang
+                                }
+                            }
+                        }
+                        .padding(3)
+                        .background(Capsule().fill(Theme.field))
+                        .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
+                    }
+                    Toggle(settings.tr("Launch at login"), isOn: $settings.launchAtLogin)
                         .toggleStyle(PillToggleStyle())
                     if let error = settings.launchAtLoginError {
                         Text(error)
                             .font(.system(size: 10.5))
                             .foregroundStyle(Theme.coral)
                     }
-                    Toggle("Hide Dock icon (menu bar only)", isOn: $settings.hideDockIcon)
+                    Toggle(settings.tr("Hide Dock icon (menu bar only)"), isOn: $settings.hideDockIcon)
                         .toggleStyle(PillToggleStyle())
                 }
 
@@ -498,17 +506,17 @@ private struct BehaviorSettingsTab: View {
                     title: "Updates",
                     footer: "TLang checks GitHub Releases for new versions and installs them in place."
                 ) {
-                    Toggle("Automatically check for updates", isOn: Binding(
+                    Toggle(settings.tr("Automatically check for updates"), isOn: Binding(
                         get: { updater.automaticallyChecks },
                         set: { updater.setAutomaticallyChecks($0) }
                     ))
                     .toggleStyle(PillToggleStyle())
                     HStack {
-                        Text("Version \(updater.currentVersion)")
+                        Text(settings.tr("Version") + " \(updater.currentVersion)")
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.textTertiary)
                         Spacer()
-                        Button("Check Now") {
+                        Button(settings.tr("Check Now")) {
                             updater.checkForUpdates()
                         }
                         .buttonStyle(GhostButtonStyle())
@@ -522,11 +530,33 @@ private struct BehaviorSettingsTab: View {
             accessibilityGranted = Permissions.accessibilityGranted
         }
     }
+
+    @ViewBuilder
+    private func segbutton(_ label: String, icon: String?, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Group {
+                if let icon {
+                    Label(label, systemImage: icon)
+                } else {
+                    Text(label)
+                }
+            }
+            .font(.system(size: 10.5, weight: selected ? .semibold : .medium))
+            .foregroundStyle(selected ? Theme.textPrimary : Theme.textTertiary)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(selected ? Theme.cardHover : .clear))
+            .overlay(Capsule().strokeBorder(selected ? Theme.strokeStrong : .clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
 }
 
 // MARK: - About
 
 private struct AboutTab: View {
+    @EnvironmentObject var settings: AppSettings
+
     var body: some View {
         VStack(spacing: 14) {
             Spacer()
@@ -534,11 +564,11 @@ private struct AboutTab: View {
             Text("TLang")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Arabic ⇄ English translation, powered by any\nOpenAI-compatible chat-completions API.")
+            Text(settings.tr("Arabic ⇄ English translation, powered by any\nOpenAI-compatible chat-completions API."))
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text("Version 1.5.0")
+            Text(settings.tr("Version") + " 1.6.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)
@@ -547,9 +577,9 @@ private struct AboutTab: View {
                 .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
 
             VStack(alignment: .leading, spacing: 7) {
-                Label("Copy text anywhere — TLang translates it automatically", systemImage: "doc.on.clipboard")
-                Label("Hold ⌘ and double-tap C for the floating translator", systemImage: "keyboard")
-                Label("History is stored locally on this Mac", systemImage: "internaldrive")
+                Label(settings.tr("Copy text anywhere — TLang translates it automatically"), systemImage: "doc.on.clipboard")
+                Label(settings.tr("Hold ⌘ and double-tap C for the floating translator"), systemImage: "keyboard")
+                Label(settings.tr("History is stored locally on this Mac"), systemImage: "internaldrive")
             }
             .font(.system(size: 11))
             .foregroundStyle(Theme.textSecondary)
@@ -561,7 +591,7 @@ private struct AboutTab: View {
                 .padding(.vertical, 4)
 
             VStack(spacing: 6) {
-                Text("Made with Claude by Raad Kasem")
+                Text(settings.tr("Made with Claude by Raad Kasem"))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.textPrimary)
                 HStack(spacing: 16) {

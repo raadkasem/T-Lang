@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistorySidebar: View {
     @EnvironmentObject var history: HistoryStore
+    @EnvironmentObject var settings: AppSettings
     @State private var query = ""
     var onSelect: (HistoryEntry) -> Void
 
@@ -21,16 +22,16 @@ struct HistorySidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                UppercaseLabel("History")
+                UppercaseLabel(settings.tr("History"))
                 Spacer()
                 if !history.entries.isEmpty {
-                    Button("Clear") {
+                    Button(settings.tr("Clear")) {
                         history.clearAll(keepPinned: true)
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.textTertiary)
-                    .help("Remove all unpinned entries")
+                    .help(settings.tr("Remove all unpinned entries"))
                 }
             }
             .padding(.horizontal, 14)
@@ -41,7 +42,7 @@ struct HistorySidebar: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.textTertiary)
-                TextField("Search history", text: $query)
+                TextField(settings.tr("Search history"), text: $query)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textPrimary)
@@ -65,7 +66,7 @@ struct HistorySidebar: View {
                     Image(systemName: "clock.arrow.circlepath")
                         .font(.system(size: 22))
                         .foregroundStyle(Theme.textTertiary)
-                    Text(history.entries.isEmpty ? "No translations yet" : "No matches")
+                    Text(settings.tr(history.entries.isEmpty ? "No translations yet" : "No matches"))
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textTertiary)
                 }
@@ -87,6 +88,7 @@ struct HistorySidebar: View {
 
 private struct HistoryRow: View {
     @EnvironmentObject var history: HistoryStore
+    @EnvironmentObject var settings: AppSettings
     let entry: HistoryEntry
     var onSelect: (HistoryEntry) -> Void
     @State private var hovering = false
@@ -140,14 +142,14 @@ private struct HistoryRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .contextMenu {
-            Button(entry.pinned ? "Unpin" : "Pin") {
+            Button(settings.tr(entry.pinned ? "Unpin" : "Pin")) {
                 history.togglePin(entry.id)
             }
-            Button("Copy Translation") {
+            Button(settings.tr("Copy Translation")) {
                 PasteService.copyToClipboard(entry.translation)
             }
             Divider()
-            Button("Delete", role: .destructive) {
+            Button(settings.tr("Delete"), role: .destructive) {
                 history.delete(entry.id)
             }
         }

@@ -17,6 +17,11 @@ and translation is the gradient between them. Full light & dark mode
 |------|-------|
 | ![TLang dark mode](screenshots/main-dark.png) | ![TLang light mode](screenshots/main-light.png) |
 
+The interface is fully localized into Arabic with right-to-left layout
+(System / English / العربية, switchable in Settings):
+
+<p align="center"><img src="screenshots/main-arabic.png" width="460" alt="TLang in Arabic (RTL)"></p>
+
 <p align="center"><img src="screenshots/settings-dark.png" width="400" alt="TLang settings"></p>
 
 ## Features
@@ -34,6 +39,15 @@ and translation is the gradient between them. Full light & dark mode
   window; optionally hide the Dock icon for menu-bar-only mode.
 - **Text-to-speech** — speaker icon on every pane reads the text aloud with the
   best installed system voice for each language (offline, free).
+- **Dictation** — mic button transcribes speech into the source pane (Arabic or
+  English), using on-device speech recognition.
+- **Model picker** — browse and pick models straight from the provider's
+  `/v1/models`, with free-text fallback.
+- **Alternative translations** — get 2–3 alternative phrasings for short text and
+  page between them.
+- **Arabic UI** — the whole interface localizes into Arabic with full RTL layout
+  (Auto / English / العربية).
+- **Resilient** — transient network/5xx errors retry with exponential backoff.
 - **Local history** — translations are saved to
   `~/Library/Application Support/TLang/history.json` (searchable, pinnable,
   never leaves your Mac; can be disabled).

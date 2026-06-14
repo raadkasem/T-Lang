@@ -32,6 +32,7 @@ struct MainView: View {
         .frame(minWidth: 720, minHeight: 440)
         .animation(.easeInOut(duration: 0.2), value: showHistory)
         .tint(Theme.lapis)
+        .environment(\.layoutDirection, settings.uiLayoutDirection)
     }
 
     private var header: some View {
@@ -47,23 +48,25 @@ struct MainView: View {
             Spacer()
             IconButton(
                 systemImage: settings.appearance.icon,
-                help: "Appearance: \(settings.appearance.label) — click to switch"
+                help: String(format: settings.tr("Appearance: %@ — click to switch"), settings.tr(settings.appearance.label))
             ) {
                 settings.appearance = settings.appearance.next
             }
             IconButton(
                 systemImage: "clock.arrow.circlepath",
                 active: showHistory,
-                help: "Translation history"
+                help: settings.tr("Translation history")
             ) {
                 showHistory.toggle()
             }
-            IconButton(systemImage: "gearshape", help: "Settings") {
+            IconButton(systemImage: "gearshape", help: settings.tr("Settings")) {
                 AppDelegate.shared?.openSettingsWindow()
             }
         }
         .padding(.horizontal, 16)
         .frame(height: 54)
+        // Keep window-control spacing on the physical left regardless of UI language.
+        .environment(\.layoutDirection, .leftToRight)
     }
 
     private var translator: some View {
@@ -74,8 +77,9 @@ struct MainView: View {
                     accent: Theme.languageColor(isArabic: vm.direction == .arToEn),
                     text: $vm.sourceText,
                     isRTL: vm.direction.sourceIsRTL,
-                    placeholder: "Type or paste — or just copy text anywhere",
-                    onClear: { vm.clear() }
+                    placeholder: settings.tr("Type or paste — or just copy text anywhere"),
+                    onClear: { vm.clear() },
+                    dictationVM: vm
                 )
 
                 SwapButton(disabled: vm.outputText.isEmpty) {
@@ -93,9 +97,9 @@ struct MainView: View {
 
     private var footer: some View {
         HStack(spacing: 18) {
-            Toggle("Auto-translate", isOn: $settings.autoTranslate)
+            Toggle(settings.tr("Auto-translate"), isOn: $settings.autoTranslate)
                 .toggleStyle(PillToggleStyle())
-            Toggle("Watch clipboard", isOn: $settings.clipboardWatcher)
+            Toggle(settings.tr("Watch clipboard"), isOn: $settings.clipboardWatcher)
                 .toggleStyle(PillToggleStyle(tint: Theme.gold))
             Spacer()
             if let error = vm.errorMessage {
@@ -111,7 +115,7 @@ struct MainView: View {
                 Button {
                     vm.stop()
                 } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    Label(settings.tr("Stop"), systemImage: "stop.fill")
                 }
                 .keyboardShortcut(".", modifiers: .command)
                 .buttonStyle(DangerButtonStyle())
@@ -119,7 +123,7 @@ struct MainView: View {
                 Button {
                     vm.translateNow()
                 } label: {
-                    Label("Translate", systemImage: "sparkles")
+                    Label(settings.tr("Translate"), systemImage: "sparkles")
                 }
                 .keyboardShortcut(.return, modifiers: .command)
                 .buttonStyle(GradientButtonStyle())
@@ -159,6 +163,7 @@ struct EditorCard: View {
     let isRTL: Bool
     var placeholder = ""
     var onClear: (() -> Void)?
+    var dictationVM: TranslatorViewModel?
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -171,6 +176,9 @@ struct EditorCard: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(accent.opacity(0.95))
                 Spacer()
+                if let dictationVM {
+                    MicButton(vm: dictationVM, accent: accent)
+                }
                 if !text.isEmpty {
                     Text("\(text.count)")
                         .font(.system(size: 10, design: .monospaced))
@@ -216,6 +224,7 @@ struct EditorCard: View {
 
 struct OutputCard: View {
     @ObservedObject var vm: TranslatorViewModel
+    @EnvironmentObject var settings: AppSettings
 
     private var isRTL: Bool { vm.direction.targetIsRTL }
     private var accent: Color { Theme.languageColor(isArabic: vm.direction == .enToAr) }
@@ -232,20 +241,20 @@ struct OutputCard: View {
                 Spacer()
                 if vm.isTranslating {
                     if vm.retryAttempt > 0 {
-                        Text("retrying…")
+                        Text(settings.tr("retrying…"))
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.coral)
                     } else if vm.isThinkingPhase {
-                        Text("thinking…")
+                        Text(settings.tr("thinking…"))
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textTertiary)
                     }
                     StreamingIndicator()
                 }
                 if !vm.outputText.isEmpty {
-                    SpeakerButton(text: vm.outputText, isArabic: isRTL, id: "output")
+                    SpeakerButton(text: vm.displayedText, isArabic: isRTL, id: "output")
                 }
-                CopyButton(text: vm.outputText)
+                CopyButton(text: vm.displayedText)
             }
             .padding(.horizontal, 13)
             .padding(.top, 11)
@@ -253,7 +262,7 @@ struct OutputCard: View {
 
             ZStack(alignment: isRTL ? .topTrailing : .topLeading) {
                 if vm.outputText.isEmpty {
-                    Text(vm.isTranslating ? "Translating…" : "Translation appears here")
+                    Text(settings.tr(vm.isTranslating ? "Translating…" : "Translation appears here"))
                         .font(.system(size: 15))
                         .foregroundStyle(Theme.textTertiary)
                         .padding(.horizontal, 13)
@@ -262,7 +271,7 @@ struct OutputCard: View {
                 }
                 // Read-only TextEditor (constant binding) so ⌘A/⌘C and native
                 // selection work in the output pane too.
-                TextEditor(text: .constant(vm.outputText))
+                TextEditor(text: .constant(vm.displayedText))
                     .font(.system(size: 15))
                     .lineSpacing(4)
                     .foregroundStyle(Theme.textPrimary)
@@ -270,7 +279,67 @@ struct OutputCard: View {
                     .padding(.horizontal, 8)
                     .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
             }
+
+            VariantBar(vm: vm)
         }
         .glassCard(focus: vm.isTranslating ? accent : nil)
+    }
+}
+
+/// Footer of the output card: offers / pages between alternative phrasings.
+struct VariantBar: View {
+    @ObservedObject var vm: TranslatorViewModel
+    @EnvironmentObject var settings: AppSettings
+
+    var body: some View {
+        Group {
+            if vm.loadingAlternatives {
+                HStack(spacing: 6) {
+                    StreamingIndicator()
+                    Text(settings.tr("finding alternatives…"))
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                    Spacer()
+                }
+            } else if vm.totalVariants > 1 {
+                HStack(spacing: 10) {
+                    pageButton("chevron.left") { vm.showVariant(vm.variantIndex - 1) }
+                        .disabled(vm.variantIndex == 0)
+                    Text(vm.variantIndex == 0
+                         ? settings.tr("Original")
+                         : "\(settings.tr("Alternatives")) \(vm.variantIndex)")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(minWidth: 92)
+                    pageButton("chevron.right") { vm.showVariant(vm.variantIndex + 1) }
+                        .disabled(vm.variantIndex >= vm.totalVariants - 1)
+                    Spacer()
+                    Text("\(vm.variantIndex + 1) / \(vm.totalVariants)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                }
+            } else if vm.canLoadAlternatives {
+                Button {
+                    vm.loadAlternatives()
+                } label: {
+                    Label(settings.tr("Alternatives"), systemImage: "wand.and.stars")
+                }
+                .buttonStyle(GhostButtonStyle(tint: Theme.gold))
+            }
+        }
+        .padding(.horizontal, 13)
+        .padding(.vertical, vm.canLoadAlternatives || vm.totalVariants > 1 || vm.loadingAlternatives ? 9 : 0)
+    }
+
+    private func pageButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 24, height: 22)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Theme.field))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.stroke, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 }

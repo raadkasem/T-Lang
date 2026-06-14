@@ -159,7 +159,7 @@ struct FloatingPanelView: View {
                 DirectionPill(direction: vm.direction, compact: true)
                 if vm.isTranslating {
                     if vm.isThinkingPhase {
-                        Text("thinking…")
+                        Text(settings.tr("thinking…"))
                             .font(.system(size: 10))
                             .foregroundStyle(Theme.textTertiary)
                     }
@@ -174,7 +174,7 @@ struct FloatingPanelView: View {
                         .foregroundStyle(Theme.textTertiary)
                 }
                 .buttonStyle(.plain)
-                .help("Close (Esc)")
+                .help(settings.tr("Close (Esc)"))
             }
             .padding(.horizontal, 13)
             .padding(.top, 11)
@@ -192,7 +192,7 @@ struct FloatingPanelView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.coral)
                     } else if vm.outputText.isEmpty && vm.isTranslating {
-                        Text("Translating…")
+                        Text(settings.tr("Translating…"))
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.textTertiary)
                     } else {
@@ -220,16 +220,16 @@ struct FloatingPanelView: View {
                     PasteService.pasteIntoFrontApp(vm.outputText)
                     FloatingPanelController.shared.close()
                 } label: {
-                    Label("Replace", systemImage: "arrow.uturn.backward.square")
+                    Label(settings.tr("Replace"), systemImage: "arrow.uturn.backward.square")
                 }
                 .buttonStyle(GhostButtonStyle(tint: Theme.gold))
-                .help("Paste the translation over the original selection")
+                .help(settings.tr("Paste the translation over the original selection"))
                 .disabled(vm.outputText.isEmpty)
                 Spacer()
                 Button {
                     FloatingPanelController.shared.openInMainWindow()
                 } label: {
-                    Label("Open in TLang", systemImage: "macwindow")
+                    Label(settings.tr("Open in TLang"), systemImage: "macwindow")
                 }
                 .buttonStyle(GhostButtonStyle())
             }
@@ -239,6 +239,7 @@ struct FloatingPanelView: View {
         .frame(width: 420, height: 280)
         .modifier(PanelChrome())
         .tint(Theme.lapis)
+        .environment(\.layoutDirection, settings.uiLayoutDirection)
     }
 }
 

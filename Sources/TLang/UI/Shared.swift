@@ -56,6 +56,36 @@ struct SpeakerButton: View {
     }
 }
 
+/// Microphone dictation toggle for the source pane.
+struct MicButton: View {
+    @ObservedObject var vm: TranslatorViewModel
+    @ObservedObject private var dictation = DictationService.shared
+    let accent: Color
+    @State private var hovering = false
+
+    private var hasError: Bool { dictation.errorMessage != nil && !dictation.isListening }
+
+    var body: some View {
+        Button {
+            vm.toggleDictation()
+        } label: {
+            Image(systemName: dictation.isListening ? "mic.fill" : "mic")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(tint)
+                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: dictation.isListening)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(dictation.errorMessage ?? (dictation.isListening ? "Stop dictation" : "Dictate"))
+    }
+
+    private var tint: Color {
+        if dictation.isListening { return accent }
+        if hasError { return Theme.coral }
+        return hovering ? Theme.textPrimary : Theme.textTertiary
+    }
+}
+
 /// Small native spinner shown while streaming. Uses NSProgressIndicator under
 /// the hood — SwiftUI repeatForever animations burn CPU when views re-render.
 struct StreamingIndicator: View {

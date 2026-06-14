@@ -17,7 +17,8 @@ struct MenuBarView: View {
                     text: $vm.sourceText,
                     isRTL: vm.direction.sourceIsRTL,
                     placeholder: "Type, paste, or copy text anywhere",
-                    onClear: { vm.clear() }
+                    onClear: { vm.clear() },
+                    dictationVM: vm
                 )
                 .frame(height: 108)
 
@@ -39,6 +40,7 @@ struct MenuBarView: View {
         }
         .frame(width: 360, height: 430)
         .tint(Theme.lapis)
+        .environment(\.layoutDirection, settings.uiLayoutDirection)
     }
 
     private var header: some View {
@@ -48,15 +50,15 @@ struct MenuBarView: View {
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
             Spacer()
-            IconButton(systemImage: "macwindow", help: "Open main window") {
+            IconButton(systemImage: "macwindow", help: settings.tr("Open main window")) {
                 dismiss()
                 AppDelegate.shared?.openMainWindow()
             }
-            IconButton(systemImage: "gearshape", help: "Settings") {
+            IconButton(systemImage: "gearshape", help: settings.tr("Settings")) {
                 dismiss()
                 AppDelegate.shared?.openSettingsWindow()
             }
-            IconButton(systemImage: "power", help: "Quit TLang") {
+            IconButton(systemImage: "power", help: settings.tr("Quit TLang")) {
                 NSApp.terminate(nil)
             }
         }
@@ -64,9 +66,8 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Toggle("Clipboard", isOn: $settings.clipboardWatcher)
+            Toggle(settings.tr("Watch clipboard"), isOn: $settings.clipboardWatcher)
                 .toggleStyle(PillToggleStyle(tint: Theme.gold))
-                .help("Auto-translate copied text")
             Spacer()
             if let error = vm.errorMessage {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -75,13 +76,13 @@ struct MenuBarView: View {
                     .help(error)
             }
             if vm.isTranslating {
-                Button("Stop") {
+                Button(settings.tr("Stop")) {
                     vm.stop()
                 }
                 .keyboardShortcut(".", modifiers: .command)
                 .buttonStyle(DangerButtonStyle())
             } else {
-                Button("Translate") {
+                Button(settings.tr("Translate")) {
                     vm.translateNow()
                 }
                 .keyboardShortcut(.return, modifiers: .command)

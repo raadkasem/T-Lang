@@ -32,7 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         applyActivationPolicy()
         wireServices()
-        _ = UpdaterController.shared
+        // Don't start the auto-updater during screenshot/CI capture runs.
+        if ProcessInfo.processInfo.environment["TLANG_SCREENSHOT_DIR"] == nil {
+            _ = UpdaterController.shared
+        }
         openMainWindow()
         runScreenshotModeIfRequested()
     }
@@ -40,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Debug hook: when TLANG_SCREENSHOT_DIR is set, render the main window
     /// (dark + light) and settings to PNGs there, then quit. Renders our own
     /// views via cacheDisplay, so no Screen Recording permission is needed.
+    /// Debug hook: when TLANG_SCREENSHOT_DIR is set, render the app's own
+    /// windows to PNGs (dark, light, settings, Arabic) and quit. Launch via
+    /// `open -n --env "TLANG_SCREENSHOT_DIR=…" build/TLang.app`.
     private func runScreenshotModeIfRequested() {
         guard let dir = ProcessInfo.processInfo.environment["TLANG_SCREENSHOT_DIR"] else { return }
         let dirURL = URL(fileURLWithPath: dir, isDirectory: true)
@@ -85,6 +91,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         queue.asyncAfter(deadline: .now() + 4.0) { [self] in
             snap(settingsWindow, "settings-dark.png")
+            // Arabic UI capture.
+            AppSettings.shared.uiLanguage = .arabic
+        }
+        queue.asyncAfter(deadline: .now() + 5.2) { [self] in
+            snap(mainWindow, "main-arabic.png")
+            snap(settingsWindow, "settings-arabic.png")
+            AppSettings.shared.uiLanguage = .system
             if let original = screenshotRestoreProvider {
                 AppSettings.shared.provider = original
             }

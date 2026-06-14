@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import Foundation
 import ServiceManagement
+import SwiftUI
 
 @MainActor
 final class AppSettings: ObservableObject {
@@ -20,6 +21,7 @@ final class AppSettings: ObservableObject {
         static let hideDockIcon = "hideDockIcon"
         static let launchAtLogin = "launchAtLogin"
         static let appearance = "appearanceMode"
+        static let uiLanguage = "uiLanguage"
     }
 
     private let defaults = UserDefaults.standard
@@ -83,6 +85,15 @@ final class AppSettings: ObservableObject {
     @Published var appearance: AppearanceMode {
         didSet { defaults.set(appearance.rawValue, forKey: K.appearance) }
     }
+    @Published var uiLanguage: AppLanguage {
+        didSet { defaults.set(uiLanguage.rawValue, forKey: K.uiLanguage) }
+    }
+
+    var resolvedLanguage: ResolvedLanguage { Localizer.resolve(uiLanguage) }
+    var uiLayoutDirection: LayoutDirection { resolvedLanguage.layoutDirection }
+
+    /// Localizes an English source string to the current UI language.
+    func tr(_ key: String) -> String { Localizer.string(key, resolvedLanguage) }
 
     private init() {
         let d = UserDefaults.standard
@@ -122,6 +133,7 @@ final class AppSettings: ObservableObject {
         hideDockIcon = Self.bool(d, K.hideDockIcon, default: false)
         launchAtLogin = Self.bool(d, K.launchAtLogin, default: false)
         appearance = AppearanceMode(rawValue: d.string(forKey: K.appearance) ?? "") ?? .system
+        uiLanguage = AppLanguage(rawValue: d.string(forKey: K.uiLanguage) ?? "") ?? .system
     }
 
     private static func bool(_ d: UserDefaults, _ key: String, default def: Bool) -> Bool {

@@ -18,6 +18,26 @@ final class TranslatorViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var direction: Direction = .enToAr
 
+    /// Alternative phrasings (index 0 is always the primary `outputText`).
+    @Published var alternatives: [String] = []
+    @Published var variantIndex = 0
+    @Published var loadingAlternatives = false
+
+    var totalVariants: Int { 1 + alternatives.count }
+
+    /// The variant currently shown in the output pane.
+    var displayedText: String {
+        guard variantIndex > 0, variantIndex - 1 < alternatives.count else { return outputText }
+        return alternatives[variantIndex - 1]
+    }
+
+    /// Alternatives are offered for short, finished translations only.
+    var canLoadAlternatives: Bool {
+        guard !isTranslating, errorMessage == nil, !outputText.isEmpty else { return false }
+        let words = sourceText.split { $0 == " " || $0 == "\n" || $0 == "\t" }.count
+        return words <= 12
+    }
+
     private var translateTask: Task<Void, Never>?
     private var debounceTask: Task<Void, Never>?
     private var generation = 0
@@ -47,6 +67,9 @@ final class TranslatorViewModel: ObservableObject {
         sourceText = source
         outputText = output
         suppressAuto = false
+        alternatives = []
+        variantIndex = 0
+        loadingAlternatives = false
         if let direction {
             self.direction = direction
         }
@@ -69,6 +92,9 @@ final class TranslatorViewModel: ObservableObject {
         retryAttempt = 0
         errorMessage = nil
         outputText = ""
+        alternatives = []
+        variantIndex = 0
+        loadingAlternatives = false
         let config = TranslationService.currentConfig()
 
         let onRetry: @Sendable (Int) -> Void = { [weak self] attempt in
@@ -124,6 +150,57 @@ final class TranslatorViewModel: ObservableObject {
         isTranslating = false
         isThinkingPhase = false
         retryAttempt = 0
+    }
+
+    /// Fetches alternative phrasings for the current short translation.
+    func loadAlternatives() {
+        guard canLoadAlternatives, alternatives.isEmpty, !loadingAlternatives else { return }
+        let text = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let dir = direction
+        let primary = outputText
+        let config = TranslationService.currentConfig()
+        loadingAlternatives = true
+        let gen = generation
+        Task { [weak self] in
+            do {
+                let alts = try await TranslationService.shared.alternatives(
+                    text: text, direction: dir, config: config, count: 2, excluding: primary)
+                guard let self, self.generation == gen else { return }
+                self.alternatives = alts
+                self.loadingAlternatives = false
+                if !alts.isEmpty { self.variantIndex = 1 }
+            } catch {
+                guard let self, self.generation == gen else { return }
+                self.loadingAlternatives = false
+            }
+        }
+    }
+
+    func showVariant(_ index: Int) {
+        guard index >= 0, index < totalVariants else { return }
+        variantIndex = index
+    }
+
+    /// Starts/stops microphone dictation into the source pane, using the
+    /// source language of the current direction.
+    func toggleDictation() {
+        let identifier = direction.sourceIsRTL ? "ar-SA" : "en-US"
+        DictationService.shared.toggle(
+            locale: Locale(identifier: identifier),
+            onPartial: { [weak self] text in self?.setDictatedSource(text) },
+            onFinish: { [weak self] in
+                guard let self, AppSettings.shared.autoTranslate else { return }
+                if !self.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.translateNow()
+                }
+            }
+        )
+    }
+
+    private func setDictatedSource(_ text: String) {
+        suppressAuto = true
+        sourceText = text
+        suppressAuto = false
     }
 
     func swap() {

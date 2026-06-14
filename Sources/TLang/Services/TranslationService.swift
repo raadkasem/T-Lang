@@ -302,6 +302,47 @@ final class TranslationService: @unchecked Sendable {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// Requests `count` alternative phrasings of a short text, distinct from
+    /// `primary`. Non-streaming; one line per alternative.
+    func alternatives(
+        text: String,
+        direction: Direction,
+        config: Config,
+        count: Int,
+        excluding primary: String
+    ) async throws -> [String] {
+        let request = try Self.makeAlternativesRequest(
+            text: text, direction: direction, config: config, count: count, primary: primary)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw TranslationError.badResponse }
+        guard http.statusCode == 200 else {
+            throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = obj["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String
+        else { throw TranslationError.badResponse }
+
+        let visible = ThinkFilter.filter(content).visible
+        let primaryNorm = primary.trimmingCharacters(in: .whitespacesAndNewlines)
+        var seen = Set<String>([primaryNorm])
+        var result: [String] = []
+        for raw in visible.split(separator: "\n", omittingEmptySubsequences: true) {
+            var line = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+            // Strip leading list markers / numbering: "1. ", "2) ", "- ", "• ".
+            if let r = line.range(of: #"^\s*(\d+[.)]|[-*•])\s+"#, options: .regularExpression) {
+                line.removeSubrange(r)
+            }
+            line = line.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+            guard !line.isEmpty, !seen.contains(line) else { continue }
+            seen.insert(line)
+            result.append(line)
+            if result.count == count { break }
+        }
+        return result
+    }
+
     private static func makeRequest(text: String, direction: Direction, config: Config) throws -> URLRequest {
         let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !base.isEmpty else { throw TranslationError.missingBaseURL }
@@ -329,6 +370,56 @@ final class TranslationService: @unchecked Sendable {
             "temperature": 0.3,
             "messages": [
                 ["role": "system", "content": systemPrompt(for: direction)],
+                ["role": "user", "content": text],
+            ],
+        ]
+        for (key, value) in config.extraBody {
+            body[key] = value
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
+    private static func makeAlternativesRequest(
+        text: String, direction: Direction, config: Config, count: Int, primary: String
+    ) throws -> URLRequest {
+        let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { throw TranslationError.missingBaseURL }
+        guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw TranslationError.missingModel
+        }
+        var urlString = base
+        while urlString.hasSuffix("/") { urlString.removeLast() }
+        guard let url = URL(string: urlString + "/chat/completions"), url.scheme != nil else {
+            throw TranslationError.badURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 20
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("TLang", forHTTPHeaderField: "X-Title")
+        if !config.apiKey.isEmpty {
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        let system = systemPrompt(for: direction) + """
+
+
+        ADDITIONAL TASK: Provide exactly \(count) ALTERNATIVE translations of the \
+        user's text into \(direction.targetPromptName). Each must be accurate but \
+        differ in word choice or phrasing from this existing translation:
+        "\(primary)"
+        Output ONLY the \(count) alternatives, each on its own line. No numbering, \
+        no quotes, no commentary, no blank lines.
+        """
+
+        var body: [String: Any] = [
+            "model": config.model,
+            "stream": false,
+            "temperature": 0.9,
+            "messages": [
+                ["role": "system", "content": system],
                 ["role": "user", "content": text],
             ],
         ]
