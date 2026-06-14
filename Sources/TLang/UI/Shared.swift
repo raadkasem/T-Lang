@@ -1,6 +1,32 @@
 import AppKit
 import SwiftUI
 
+/// Shared circular chrome for the small action buttons in pane headers, so
+/// they read as tappable controls rather than faint glyphs.
+struct CardIconChrome: ViewModifier {
+    var active: Bool = false
+    var activeColor: Color = Theme.lapis
+    var hovering: Bool = false
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: 26, height: 26)
+            .background(
+                Circle().fill(active ? activeColor.opacity(0.18) : (hovering ? Theme.cardHover : Theme.field))
+            )
+            .overlay(
+                Circle().strokeBorder(active ? activeColor.opacity(0.5) : Theme.stroke, lineWidth: 1)
+            )
+            .contentShape(Circle())
+    }
+}
+
+extension View {
+    func cardIconChrome(active: Bool = false, activeColor: Color = Theme.lapis, hovering: Bool = false) -> some View {
+        modifier(CardIconChrome(active: active, activeColor: activeColor, hovering: hovering))
+    }
+}
+
 /// Copy button that briefly flips to a checkmark.
 struct CopyButton: View {
     let text: String
@@ -17,9 +43,10 @@ struct CopyButton: View {
             }
         } label: {
             Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(copied ? Theme.green : (hovering ? Theme.textPrimary : Theme.textTertiary))
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(copied ? Theme.green : (hovering ? Theme.textPrimary : Theme.textSecondary))
                 .contentTransition(.symbolEffect(.replace))
+                .cardIconChrome(active: copied, activeColor: Theme.green, hovering: hovering)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -45,9 +72,10 @@ struct SpeakerButton: View {
             speech.toggle(text: text, isArabic: isArabic, id: id)
         } label: {
             Image(systemName: speaking ? "speaker.wave.2.fill" : "speaker.wave.2")
-                .font(.system(size: 10.5, weight: .medium))
-                .foregroundStyle(speaking ? tint : (hovering ? Theme.textPrimary : Theme.textTertiary))
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(speaking ? tint : (hovering ? Theme.textPrimary : Theme.textSecondary))
                 .symbolEffect(.variableColor.iterative, options: .repeating, isActive: speaking)
+                .cardIconChrome(active: speaking, activeColor: tint, hovering: hovering)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
@@ -56,33 +84,104 @@ struct SpeakerButton: View {
     }
 }
 
-/// Microphone dictation toggle for the source pane.
+/// Clear button for an editor pane.
+struct ClearButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(hovering ? Theme.coral : Theme.textSecondary)
+                .cardIconChrome(active: hovering, activeColor: Theme.coral, hovering: hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Clear")
+    }
+}
+
+/// Compact flag switcher for the UI language. Tapping a flag sets the language
+/// explicitly (English / Arabic). "Auto" remains available in Settings.
+struct LanguageSwitcher: View {
+    @EnvironmentObject var settings: AppSettings
+
+    var body: some View {
+        HStack(spacing: 2) {
+            flag("🇬🇧", language: .english)
+            flag("🇸🇦", language: .arabic)
+        }
+        .padding(2)
+        .background(Capsule().fill(Theme.field))
+        .overlay(Capsule().strokeBorder(Theme.stroke, lineWidth: 1))
+        // Keep flag order stable regardless of UI direction.
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func flag(_ emoji: String, language: AppLanguage) -> some View {
+        let active = settings.resolvedLanguage == Localizer.resolve(language)
+        return Button {
+            settings.uiLanguage = language
+        } label: {
+            Text(emoji)
+                .font(.system(size: 13))
+                .saturation(active ? 1 : 0)
+                .opacity(active ? 1 : 0.55)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(active ? Theme.cardHover : .clear))
+                .overlay(Capsule().strokeBorder(active ? Theme.strokeStrong : .clear, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(language.label)
+    }
+}
+
+/// Microphone dictation toggle for the source pane. While listening it turns
+/// solid red with an expanding pulse ring so it's obvious recording is live.
 struct MicButton: View {
     @ObservedObject var vm: TranslatorViewModel
     @ObservedObject private var dictation = DictationService.shared
     let accent: Color
     @State private var hovering = false
+    @State private var pulse = false
 
-    private var hasError: Bool { dictation.errorMessage != nil && !dictation.isListening }
+    private var listening: Bool { dictation.isListening }
+    private var hasError: Bool { dictation.errorMessage != nil && !listening }
 
     var body: some View {
         Button {
             vm.toggleDictation()
         } label: {
-            Image(systemName: dictation.isListening ? "mic.fill" : "mic")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(tint)
-                .symbolEffect(.variableColor.iterative, options: .repeating, isActive: dictation.isListening)
+            ZStack {
+                if listening {
+                    Circle()
+                        .stroke(Theme.coral, lineWidth: 2)
+                        .frame(width: 26, height: 26)
+                        .scaleEffect(pulse ? 1.7 : 1.0)
+                        .opacity(pulse ? 0 : 0.8)
+                }
+                Image(systemName: listening ? "mic.fill" : "mic")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(listening ? .white : (hasError ? Theme.coral : (hovering ? Theme.textPrimary : Theme.textSecondary)))
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(listening ? Theme.coral : (hovering ? Theme.cardHover : Theme.field)))
+                    .overlay(Circle().strokeBorder(listening ? Theme.coral : Theme.stroke, lineWidth: 1))
+            }
+            .frame(width: 26, height: 26)
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help(dictation.errorMessage ?? (dictation.isListening ? "Stop dictation" : "Dictate"))
-    }
-
-    private var tint: Color {
-        if dictation.isListening { return accent }
-        if hasError { return Theme.coral }
-        return hovering ? Theme.textPrimary : Theme.textTertiary
+        .help(dictation.errorMessage ?? (listening ? "Stop dictation" : "Dictate"))
+        .onChange(of: listening) { _, now in
+            if now {
+                pulse = false
+                withAnimation(.easeOut(duration: 1.0).repeatForever(autoreverses: false)) { pulse = true }
+            } else {
+                pulse = false
+            }
+        }
     }
 }
 

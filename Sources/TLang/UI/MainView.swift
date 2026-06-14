@@ -46,6 +46,7 @@ struct MainView: View {
             Spacer()
             DirectionPill(direction: vm.direction)
             Spacer()
+            LanguageSwitcher()
             IconButton(
                 systemImage: settings.appearance.icon,
                 help: String(format: settings.tr("Appearance: %@ — click to switch"), settings.tr(settings.appearance.label))
@@ -184,15 +185,7 @@ struct EditorCard: View {
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(Theme.textTertiary)
                     SpeakerButton(text: text, isArabic: isRTL, id: "source")
-                    Button {
-                        onClear?()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.textTertiary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Clear")
+                    ClearButton { onClear?() }
                 }
             }
             .padding(.horizontal, 13)

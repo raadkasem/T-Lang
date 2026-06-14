@@ -188,9 +188,12 @@ final class TranslatorViewModel: ObservableObject {
         DictationService.shared.toggle(
             locale: Locale(identifier: identifier),
             onPartial: { [weak self] text in self?.setDictatedSource(text) },
-            onFinish: { [weak self] in
-                guard let self, AppSettings.shared.autoTranslate else { return }
-                if !self.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onFinish: { [weak self] finalText in
+                guard let self else { return }
+                // Keep the recognized text in the source pane, then translate it.
+                self.setDictatedSource(finalText)
+                if AppSettings.shared.autoTranslate,
+                   !self.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     self.translateNow()
                 }
             }
@@ -198,6 +201,7 @@ final class TranslatorViewModel: ObservableObject {
     }
 
     private func setDictatedSource(_ text: String) {
+        guard !text.isEmpty else { return }
         suppressAuto = true
         sourceText = text
         suppressAuto = false

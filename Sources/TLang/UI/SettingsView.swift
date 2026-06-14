@@ -568,7 +568,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text(settings.tr("Version") + " 1.6.0")
+            Text(settings.tr("Version") + " 1.6.1")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)

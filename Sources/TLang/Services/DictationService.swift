@@ -17,11 +17,12 @@ final class DictationService: NSObject, ObservableObject {
     private var task: SFSpeechRecognitionTask?
 
     private var onPartial: ((String) -> Void)?
-    private var onFinish: (() -> Void)?
+    private var onFinish: ((String) -> Void)?
+    private var lastTranscript = ""
 
     override private init() { super.init() }
 
-    func toggle(locale: Locale, onPartial: @escaping (String) -> Void, onFinish: @escaping () -> Void) {
+    func toggle(locale: Locale, onPartial: @escaping (String) -> Void, onFinish: @escaping (String) -> Void) {
         if isListening {
             stop()
         } else {
@@ -29,8 +30,9 @@ final class DictationService: NSObject, ObservableObject {
         }
     }
 
-    func start(locale: Locale, onPartial: @escaping (String) -> Void, onFinish: @escaping () -> Void) {
+    func start(locale: Locale, onPartial: @escaping (String) -> Void, onFinish: @escaping (String) -> Void) {
         errorMessage = nil
+        lastTranscript = ""
         self.onPartial = onPartial
         self.onFinish = onFinish
 
@@ -56,7 +58,7 @@ final class DictationService: NSObject, ObservableObject {
         request?.endAudio()
         task?.finish()
         isListening = false
-        onFinish?()
+        onFinish?(lastTranscript)
     }
 
     private func beginRecording(locale: Locale) throws {
@@ -85,7 +87,13 @@ final class DictationService: NSObject, ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 if let result {
-                    self.onPartial?(result.bestTranscription.formattedString)
+                    // Ignore empty transcripts so a late/flush result can't wipe
+                    // the text the user just dictated.
+                    let text = result.bestTranscription.formattedString
+                    if !text.isEmpty {
+                        self.lastTranscript = text
+                        self.onPartial?(text)
+                    }
                     if result.isFinal { self.stop() }
                 }
                 if error != nil {
