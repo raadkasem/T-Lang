@@ -177,6 +177,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        settings.$autoTranslate
+            .dropFirst()
+            .sink { on in
+                Task { @MainActor in
+                    if !on { TranslatorViewModel.main.cancelPendingAutoTranslate() }
+                }
+            }
+            .store(in: &cancellables)
+
         settings.$appearance
             .sink { mode in
                 Task { @MainActor in

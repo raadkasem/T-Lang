@@ -56,7 +56,10 @@ final class TranslatorViewModel: ObservableObject {
         let snapshot = sourceText
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 900_000_000)
-            guard !Task.isCancelled, let self, self.sourceText == snapshot else { return }
+            // Re-check the toggle at fire time: if the user turned auto-translate
+            // off during the debounce window, this pending translation is dropped.
+            guard !Task.isCancelled, let self, self.sourceText == snapshot,
+                  AppSettings.shared.autoTranslate else { return }
             self.translateNow()
         }
     }
@@ -150,6 +153,11 @@ final class TranslatorViewModel: ObservableObject {
         isTranslating = false
         isThinkingPhase = false
         retryAttempt = 0
+    }
+
+    /// Cancels a queued auto-translate (e.g. when the toggle is switched off).
+    func cancelPendingAutoTranslate() {
+        debounceTask?.cancel()
     }
 
     /// Fetches alternative phrasings for the current short translation.

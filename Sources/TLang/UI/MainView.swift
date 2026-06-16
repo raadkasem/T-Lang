@@ -181,9 +181,6 @@ struct EditorCard: View {
                     MicButton(vm: dictationVM, accent: accent)
                 }
                 if !text.isEmpty {
-                    Text("\(text.count)")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(Theme.textTertiary)
                     SpeakerButton(text: text, isArabic: isRTL, id: "source")
                     ClearButton { onClear?() }
                 }
@@ -209,6 +206,23 @@ struct EditorCard: View {
                     .padding(.horizontal, 8)
                     .focused($focused)
                     .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
+            }
+            // Character count, tucked into the bottom corner inside the field.
+            .overlay(alignment: .bottomTrailing) {
+                if !text.isEmpty {
+                    Text("\(text.count)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule(style: .continuous)
+                                .fill(.ultraThinMaterial)
+                        )
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 6)
+                        .allowsHitTesting(false)
+                }
             }
         }
         .glassCard(focus: focused ? accent : nil)
