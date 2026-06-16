@@ -189,7 +189,10 @@ struct EditorCard: View {
             .padding(.top, 11)
             .padding(.bottom, 6)
 
-            ZStack(alignment: isRTL ? .topTrailing : .topLeading) {
+            // Placeholder follows the UI language direction (.topLeading), so an
+            // English hint stays left-aligned even when the pane's text is RTL —
+            // otherwise it gets pushed under the scrollbar.
+            ZStack(alignment: .topLeading) {
                 if text.isEmpty && !placeholder.isEmpty {
                     Text(placeholder)
                         .font(.system(size: 15))
@@ -267,7 +270,10 @@ struct OutputCard: View {
             .padding(.top, 11)
             .padding(.bottom, 6)
 
-            ZStack(alignment: isRTL ? .topTrailing : .topLeading) {
+            // Placeholder follows the UI language direction (.topLeading) so it
+            // stays readable and clear of the scrollbar regardless of the
+            // translation language.
+            ZStack(alignment: .topLeading) {
                 if vm.outputText.isEmpty {
                     Text(settings.tr(vm.isTranslating ? "Translating…" : "Translation appears here"))
                         .font(.system(size: 15))
