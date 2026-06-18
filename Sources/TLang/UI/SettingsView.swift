@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct SettingsView: View {
@@ -386,6 +387,75 @@ private struct ProviderSettingsTab: View {
     }
 }
 
+// MARK: - Voice
+
+/// Picks the system voice per language and points users at Apple's
+/// downloadable Premium/Enhanced voices for a more natural English voice.
+private struct VoiceSettingsCard: View {
+    @EnvironmentObject var settings: AppSettings
+    @ObservedObject private var speech = SpeechService.shared
+    @State private var refresh = 0
+    // Re-read installed voices periodically so newly-downloaded voices appear.
+    private let timer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        let _ = refresh // make body depend on the refresh tick
+        let hasUpgraded = SpeechService.hasUpgradedVoice(isArabic: false)
+        return SettingsCard(
+            title: "Voice",
+            footer: "Speech uses your Mac's installed voices. Download more natural English voices — marked Premium or Enhanced — in System Settings, then choose one here. They run offline."
+        ) {
+            voiceRow(label: "English", isArabic: false, selection: $settings.englishVoiceID)
+            voiceRow(label: "Arabic", isArabic: true, selection: $settings.arabicVoiceID)
+            Button {
+                Permissions.openSpokenContentSettings()
+            } label: {
+                Label(
+                    settings.tr(hasUpgraded ? "Manage system voices…" : "Get more natural voices…"),
+                    systemImage: "arrow.down.circle"
+                )
+            }
+            .buttonStyle(GhostButtonStyle(tint: hasUpgraded ? Theme.textPrimary : Theme.gold))
+        }
+        .onReceive(timer) { _ in refresh += 1 }
+    }
+
+    @ViewBuilder
+    private func voiceRow(label: String, isArabic: Bool, selection: Binding<String>) -> some View {
+        let voices = SpeechService.installedVoices(isArabic: isArabic)
+        let isPreviewing = speech.speakingID == "preview"
+        HStack(spacing: 8) {
+            Text(settings.tr(label))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Picker("", selection: selection) {
+                Text(settings.tr("Automatic")).tag("")
+                ForEach(voices, id: \.identifier) { voice in
+                    Text("\(voice.name) · \(localizedQuality(voice.quality))").tag(voice.identifier)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .frame(maxWidth: 220)
+            Button {
+                if isPreviewing { speech.stop() }
+                else { speech.preview(voiceID: selection.wrappedValue, isArabic: isArabic) }
+            } label: {
+                Image(systemName: isPreviewing ? "stop.circle.fill" : "play.circle")
+                    .font(.system(size: 16))
+                    .foregroundStyle(Theme.lapis)
+            }
+            .buttonStyle(.plain)
+            .help(settings.tr("Preview"))
+        }
+    }
+
+    private func localizedQuality(_ quality: AVSpeechSynthesisVoiceQuality) -> String {
+        settings.tr(SpeechService.qualityLabel(quality))
+    }
+}
+
 // MARK: - Behavior
 
 private struct BehaviorSettingsTab: View {
@@ -405,6 +475,8 @@ private struct BehaviorSettingsTab: View {
                     Toggle(settings.tr("Watch clipboard and translate copied text"), isOn: $settings.clipboardWatcher)
                         .toggleStyle(PillToggleStyle(tint: Theme.gold))
                 }
+
+                VoiceSettingsCard()
 
                 SettingsCard(
                     title: "Hotkey",
@@ -568,7 +640,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text(settings.tr("Version") + " 1.6.4")
+            Text(settings.tr("Version") + " 1.7.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)
