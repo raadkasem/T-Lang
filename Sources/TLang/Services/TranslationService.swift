@@ -47,6 +47,9 @@ enum ThinkFilter {
         ("<think>", "</think>"),
         ("<thinking>", "</thinking>"),
         ("<reasoning>", "</reasoning>"),
+        // Gemma / MedGemma reasoning variants wrap their thinking in these
+        // "unused" special tokens before emitting the answer.
+        ("<unused94>", "<unused95>"),
     ]
 
     static func filter(_ raw: String) -> (visible: String, thinking: Bool) {

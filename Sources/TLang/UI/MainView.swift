@@ -282,15 +282,14 @@ struct OutputCard: View {
                         .padding(.top, 1)
                         .allowsHitTesting(false)
                 }
-                // Read-only TextEditor (constant binding) so ⌘A/⌘C and native
-                // selection work in the output pane too.
-                TextEditor(text: .constant(vm.displayedText))
-                    .font(.system(size: 15))
-                    .lineSpacing(4)
-                    .foregroundStyle(Theme.textPrimary)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 8)
-                    .environment(\.layoutDirection, isRTL ? .rightToLeft : .leftToRight)
+                // Rendered Markdown output (selectable). Scrolls for long results.
+                ScrollView {
+                    MarkdownText(markdown: vm.displayedText, isRTL: isRTL)
+                        .padding(.horizontal, 13)
+                        .padding(.top, 1)
+                        .padding(.bottom, 10)
+                }
+                .scrollContentBackground(.hidden)
             }
 
             VariantBar(vm: vm)

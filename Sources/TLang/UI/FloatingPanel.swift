@@ -196,12 +196,7 @@ struct FloatingPanelView: View {
                             .font(.system(size: 13))
                             .foregroundStyle(Theme.textTertiary)
                     } else {
-                        Text(vm.outputText)
-                            .font(.system(size: 14))
-                            .lineSpacing(3)
-                            .foregroundStyle(Theme.textPrimary)
-                            .textSelection(.enabled)
-                            .multilineTextAlignment(isRTL ? .trailing : .leading)
+                        MarkdownText(markdown: vm.outputText, isRTL: isRTL)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: isRTL ? .trailing : .leading)

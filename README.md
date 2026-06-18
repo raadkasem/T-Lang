@@ -49,12 +49,15 @@ The interface is fully localized into Arabic with right-to-left layout
 - **Arabic UI** — the whole interface localizes into Arabic with full RTL layout.
   Switch languages with the 🇬🇧 / 🇸🇦 flags in the window header, or pick
   Auto / English / العربية in Settings.
+- **Markdown output** — the translation pane renders Markdown (headings, lists,
+  bold/italic, inline code, code blocks, quotes), RTL-aware.
 - **Resilient** — transient network/5xx errors retry with exponential backoff.
 - **Local history** — translations are saved to
   `~/Library/Application Support/TLang/history.json` (searchable, pinnable,
   never leaves your Mac; can be disabled).
 - **Thinking disabled** — reasoning models are told not to "think", using the
-  correct knob per provider; inline `<think>` blocks are stripped as a fallback.
+  correct knob per provider; inline reasoning blocks are stripped as a fallback
+  (`<think>`, `<reasoning>`, and Gemma/MedGemma `<unused94>…<unused95>`).
 - **Auto-updates** — TLang checks GitHub Releases and installs new versions in
   place (signed with Sparkle/EdDSA). Toggle in Settings, or *Check for Updates…*.
 - **Launch at login**, API key in the **Keychain**, streaming responses.
