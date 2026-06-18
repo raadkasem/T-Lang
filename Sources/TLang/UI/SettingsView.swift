@@ -423,7 +423,7 @@ private struct VoiceSettingsCard: View {
     @ViewBuilder
     private func voiceRow(label: String, isArabic: Bool, selection: Binding<String>) -> some View {
         let voices = SpeechService.installedVoices(isArabic: isArabic)
-        let isPreviewing = speech.speakingID == "preview"
+        let isPreviewing = speech.speakingID == (isArabic ? "preview-ar" : "preview-en")
         HStack(spacing: 8) {
             Text(settings.tr(label))
                 .font(.system(size: 12, weight: .medium))
@@ -640,7 +640,7 @@ private struct AboutTab: View {
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text(settings.tr("Version") + " 1.7.0")
+            Text(settings.tr("Version") + " 1.7.1")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)

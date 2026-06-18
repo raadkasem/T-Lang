@@ -45,7 +45,7 @@ final class SpeechService: NSObject, ObservableObject {
             : "Hello — this is a preview of the voice quality."
         let utterance = AVSpeechUtterance(string: sample)
         utterance.voice = AVSpeechSynthesisVoice(identifier: voiceID) ?? Self.bestVoice(isArabic: isArabic)
-        speakingID = "preview"
+        speakingID = isArabic ? "preview-ar" : "preview-en"
         synthesizer.speak(utterance)
     }
 
