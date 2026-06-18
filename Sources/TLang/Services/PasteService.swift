@@ -14,6 +14,13 @@ enum Permissions {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
         NSWorkspace.shared.open(url)
     }
+
+    /// Opens Accessibility → Spoken Content, where users download and manage
+    /// the Premium/Enhanced system voices.
+    static func openSpokenContentSettings() {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.universalaccess?TextToSpeech")!
+        NSWorkspace.shared.open(url)
+    }
 }
 
 enum PasteService {

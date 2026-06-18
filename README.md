@@ -37,8 +37,9 @@ The interface is fully localized into Arabic with right-to-left layout
   original selection automatically.
 - **Menu bar + full window** — a compact menu bar popover and a full translator
   window; optionally hide the Dock icon for menu-bar-only mode.
-- **Text-to-speech** — speaker icon on every pane reads the text aloud with the
-  best installed system voice for each language (offline, free).
+- **Text-to-speech** — speaker icon on every pane reads the text aloud (offline,
+  free). Pick a voice per language in Settings, preview it, and download more
+  natural **Premium/Enhanced** system voices straight from there.
 - **Dictation** — mic button transcribes speech into the source pane (Arabic or
   English) with on-device speech recognition; the mic glows red and pulses while
   it's listening.

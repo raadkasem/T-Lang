@@ -22,6 +22,8 @@ final class AppSettings: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let appearance = "appearanceMode"
         static let uiLanguage = "uiLanguage"
+        static let englishVoiceID = "englishVoiceID"
+        static let arabicVoiceID = "arabicVoiceID"
     }
 
     private let defaults = UserDefaults.standard
@@ -88,6 +90,13 @@ final class AppSettings: ObservableObject {
     @Published var uiLanguage: AppLanguage {
         didSet { defaults.set(uiLanguage.rawValue, forKey: K.uiLanguage) }
     }
+    /// Chosen system voice identifier per language ("" = automatic best).
+    @Published var englishVoiceID: String {
+        didSet { defaults.set(englishVoiceID, forKey: K.englishVoiceID) }
+    }
+    @Published var arabicVoiceID: String {
+        didSet { defaults.set(arabicVoiceID, forKey: K.arabicVoiceID) }
+    }
 
     var resolvedLanguage: ResolvedLanguage { Localizer.resolve(uiLanguage) }
     var uiLayoutDirection: LayoutDirection { resolvedLanguage.layoutDirection }
@@ -134,6 +143,8 @@ final class AppSettings: ObservableObject {
         launchAtLogin = Self.bool(d, K.launchAtLogin, default: false)
         appearance = AppearanceMode(rawValue: d.string(forKey: K.appearance) ?? "") ?? .system
         uiLanguage = AppLanguage(rawValue: d.string(forKey: K.uiLanguage) ?? "") ?? .system
+        englishVoiceID = d.string(forKey: K.englishVoiceID) ?? ""
+        arabicVoiceID = d.string(forKey: K.arabicVoiceID) ?? ""
     }
 
     private static func bool(_ d: UserDefaults, _ key: String, default def: Bool) -> Bool {

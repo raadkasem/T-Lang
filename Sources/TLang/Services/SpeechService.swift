@@ -37,6 +37,18 @@ final class SpeechService: NSObject, ObservableObject {
         synthesizer.speak(utterance)
     }
 
+    /// Speaks a short sample with a specific voice (for the Settings preview).
+    func preview(voiceID: String, isArabic: Bool) {
+        stop()
+        let sample = isArabic
+            ? "مرحبًا، هذه معاينة لجودة الصوت."
+            : "Hello — this is a preview of the voice quality."
+        let utterance = AVSpeechUtterance(string: sample)
+        utterance.voice = AVSpeechSynthesisVoice(identifier: voiceID) ?? Self.bestVoice(isArabic: isArabic)
+        speakingID = "preview"
+        synthesizer.speak(utterance)
+    }
+
     func stop() {
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
@@ -44,10 +56,39 @@ final class SpeechService: NSObject, ObservableObject {
         speakingID = nil
     }
 
-    /// Best installed voice for the language. English prefers a female voice;
-    /// within that, higher quality wins, then the canonical region
-    /// (en-US / ar-001 Majed).
+    /// Installed voices for a language, best quality first (for the picker).
+    static func installedVoices(isArabic: Bool) -> [AVSpeechSynthesisVoice] {
+        let prefix = isArabic ? "ar" : "en"
+        return AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language.hasPrefix(prefix) }
+            .sorted { a, b in
+                if a.quality != b.quality { return a.quality.rawValue > b.quality.rawValue }
+                return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+            }
+    }
+
+    /// True when at least one Enhanced/Premium voice is installed for the language.
+    static func hasUpgradedVoice(isArabic: Bool) -> Bool {
+        installedVoices(isArabic: isArabic).contains { $0.quality != .default }
+    }
+
+    static func qualityLabel(_ quality: AVSpeechSynthesisVoiceQuality) -> String {
+        switch quality {
+        case .premium: return "Premium"
+        case .enhanced: return "Enhanced"
+        default: return "Standard"
+        }
+    }
+
+    /// Best voice for the language: a user-chosen voice if set and still
+    /// installed, otherwise the best installed (English prefers a female voice;
+    /// then higher quality, then the canonical region en-US / ar-001 Majed).
     static func bestVoice(isArabic: Bool) -> AVSpeechSynthesisVoice? {
+        let chosenID = isArabic ? AppSettings.shared.arabicVoiceID : AppSettings.shared.englishVoiceID
+        if !chosenID.isEmpty, let chosen = AVSpeechSynthesisVoice(identifier: chosenID) {
+            return chosen
+        }
+
         let prefix = isArabic ? "ar" : "en"
         let preferredRegion = isArabic ? "ar-001" : "en-US"
 
