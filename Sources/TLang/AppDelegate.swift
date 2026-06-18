@@ -132,7 +132,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let vm = TranslatorViewModel.main
             guard text != vm.sourceText else { return }
             vm.setTexts(source: text, output: "")
-            vm.translateNow()
+            // "Auto-translate" is the master switch for automatic translation —
+            // a passive clipboard capture only translates when it's on. (The
+            // double-⌘C hotkey is an explicit action and always translates.)
+            if AppSettings.shared.autoTranslate {
+                vm.translateNow()
+            }
         }
         HotkeyManager.shared.onDoubleCopy = {
             FloatingPanelController.shared.handleDoubleCopy()
