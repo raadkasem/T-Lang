@@ -223,3 +223,65 @@ struct DirectionPill: View {
             .overlay(Capsule().strokeBorder(color.opacity(0.3), lineWidth: 1))
     }
 }
+
+/// Full technical error behind a collapsed "Details" toggle: expandable
+/// monospaced, selectable text, plus Copy and Open-error-log actions.
+/// Shared by the main-window error banner and the Settings connection test.
+struct TechnicalErrorDetails: View {
+    @EnvironmentObject var settings: AppSettings
+    let detail: String
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { isExpanded.toggle() }
+                } label: {
+                    Label(
+                        settings.tr(isExpanded ? "Hide details" : "Details"),
+                        systemImage: isExpanded ? "chevron.up.circle" : "chevron.down.circle"
+                    )
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Button {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(detail, forType: .string)
+                } label: {
+                    Label(settings.tr("Copy"), systemImage: "doc.on.doc")
+                }
+                .buttonStyle(GhostButtonStyle())
+                Button {
+                    ErrorLog.open()
+                } label: {
+                    Label(settings.tr("Open error log"), systemImage: "doc.text.magnifyingglass")
+                }
+                .buttonStyle(GhostButtonStyle(tint: Theme.gold))
+            }
+            if isExpanded {
+                ScrollView {
+                    Text(detail)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: 150)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Theme.field)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .strokeBorder(Theme.stroke, lineWidth: 1)
+                )
+                Text(settings.tr("Latest errors are logged to ~/Library/Application Support/TLang/error.log"))
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+        }
+    }
+}

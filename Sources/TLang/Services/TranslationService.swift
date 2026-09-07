@@ -6,6 +6,12 @@ enum TranslationError: LocalizedError {
     case badURL
     case badResponse
     case http(Int, String)
+    /// In-stream failure reported by a Responses API event
+    /// (`response.failed` / `error`) or an unparseable payload.
+    case api(String)
+    /// OpenCode Go serves some models (MiniMax, Qwen) only over the
+    /// Anthropic `/messages` protocol, which this client doesn't speak.
+    case anthropicOnly
 
     var errorDescription: String? {
         switch self {
@@ -23,8 +29,44 @@ enum TranslationError: LocalizedError {
             }
             let detail = Self.extractAPIError(message) ?? message
             let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
-            return "Server error \(code)" + (trimmed.isEmpty ? "" : ": \(String(trimmed.prefix(200)))")
+            return "Server error \(code)" + (trimmed.isEmpty ? "" : ": \(String(trimmed.prefix(300)))")
+        case .api(let message):
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return "API error" + (trimmed.isEmpty ? "" : ": \(String(trimmed.prefix(300)))")
+        case .anthropicOnly:
+            return "This model is only served over Anthropic's /messages protocol, "
+                + "which TLang doesn't support yet. Pick a GLM, Kimi, DeepSeek, "
+                + "Grok or GPT model instead."
         }
+    }
+
+    /// Full, untruncated technical context (raw server body etc.) for an
+    /// expandable details view or the error log. Nil when there is nothing
+    /// beyond the summary.
+    var technicalDetail: String? {
+        switch self {
+        case .http(let code, let body):
+            return body.isEmpty ? "HTTP \(code) — no response body" : "HTTP \(code)\n\(body)"
+        case .api(let message):
+            return message
+        case .missingBaseURL, .missingModel, .badURL, .badResponse, .anthropicOnly:
+            return nil
+        }
+    }
+
+    /// Full technical context for any error, including network failures.
+    static func technicalDetail(for error: Error) -> String? {
+        if let e = error as? TranslationError {
+            return e.technicalDetail
+        }
+        if let e = error as? URLError {
+            var lines = ["URLError \(e.errorCode): \(e.localizedDescription)"]
+            if let url = e.userInfo[NSURLErrorKey] as? URL {
+                lines.append("URL: \(url)")
+            }
+            return lines.joined(separator: "\n")
+        }
+        return nil
     }
 
     private static func extractAPIError(_ body: String) -> String? {
@@ -103,6 +145,12 @@ final class TranslationService: @unchecked Sendable {
         let apiKey: String
         let model: String
         let extraBody: [String: Any]
+        /// Wire protocol the endpoint expects for this model.
+        let flavor: APIFlavor
+        /// Provider-specific headers (e.g. OpenCode's `x-opencode-session`).
+        let sessionHeaders: [String: String]
+        /// Reasoning-locked models reject `temperature` — omit it entirely.
+        let omitsTemperature: Bool
     }
 
     private let session: URLSession
@@ -119,10 +167,26 @@ final class TranslationService: @unchecked Sendable {
     @MainActor
     static func currentConfig() -> Config {
         let s = AppSettings.shared
+        let flavor = s.provider.apiFlavor(model: s.model)
         let extra = s.disableThinking
-            ? s.provider.thinkingDisableParams(model: s.model)
+            ? s.provider.thinkingDisableParams(model: s.model, flavor: flavor)
             : [:]
-        return Config(baseURL: s.baseURL, apiKey: s.apiKey, model: s.model, extraBody: extra)
+        return Config(
+            baseURL: s.baseURL,
+            apiKey: s.apiKey,
+            model: s.model,
+            extraBody: extra,
+            flavor: flavor,
+            sessionHeaders: s.provider.extraHeaders(),
+            omitsTemperature: s.provider.rejectsTemperature(model: s.model))
+    }
+
+    /// OpenCode (and good API citizens generally) want a real client
+    /// identity instead of a generic HTTP-library User-Agent.
+    static var userAgent: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+            as? String ?? "dev"
+        return "TLang/\(version)"
     }
 
     static func systemPrompt(for direction: Direction) -> String {
@@ -177,10 +241,12 @@ final class TranslationService: @unchecked Sendable {
 
     private static let maxAttempts = 3
 
-    /// Streams translated text chunks from an OpenAI-compatible chat-completions
-    /// endpoint. Transient connection/5xx failures are retried with exponential
-    /// backoff — but only before the first token is emitted, so a mid-stream drop
-    /// never duplicates output. `onRetry` reports the attempt number (1-based).
+    /// Streams translated text chunks from an OpenAI-compatible endpoint,
+    /// in either wire format: chat-completions `choices[].delta` chunks or
+    /// Responses-API typed events (`response.output_text.delta`). Transient
+    /// connection/5xx failures are retried with exponential backoff — but
+    /// only before the first token is emitted, so a mid-stream drop never
+    /// duplicates output. `onRetry` reports the attempt number (1-based).
     func stream(
         text: String,
         direction: Direction,
@@ -190,8 +256,10 @@ final class TranslationService: @unchecked Sendable {
         AsyncThrowingStream { continuation in
             let task = Task {
                 var yieldedAny = false
+                var endpoint = Self.endpointDescription(for: config)
                 do {
                     let request = try Self.makeRequest(text: text, direction: direction, config: config)
+                    if let url = request.url?.absoluteString { endpoint = url }
                     var attempt = 0
                     while true {
                         attempt += 1
@@ -217,16 +285,15 @@ final class TranslationService: @unchecked Sendable {
                                 try Task.checkCancellation()
                                 guard line.hasPrefix("data:") else { continue }
                                 let payload = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-                                if payload == "[DONE]" { break }
-                                guard let data = payload.data(using: .utf8),
-                                      let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                                      let choices = obj["choices"] as? [[String: Any]],
-                                      let delta = choices.first?["delta"] as? [String: Any],
-                                      let piece = delta["content"] as? String,
-                                      !piece.isEmpty
-                                else { continue }
-                                yieldedAny = true
-                                continuation.yield(piece)
+                                let event = Self.parseSSEPayload(payload, flavor: config.flavor)
+                                if let message = event.error {
+                                    throw TranslationError.api(message)
+                                }
+                                if let piece = event.text, !piece.isEmpty {
+                                    yieldedAny = true
+                                    continuation.yield(piece)
+                                }
+                                if event.done { break }
                             }
                             continuation.finish()
                             return
@@ -241,6 +308,11 @@ final class TranslationService: @unchecked Sendable {
                         }
                     }
                 } catch {
+                    // Only genuine request failures are logged — user
+                    // cancellations and misconfiguration are not.
+                    if !Self.isCancellation(error), !Self.isConfigurationError(error) {
+                        ErrorLog.record(model: config.model, endpoint: endpoint, error: error)
+                    }
                     continuation.finish(throwing: error)
                 }
             }
@@ -259,6 +331,7 @@ final class TranslationService: @unchecked Sendable {
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         }
@@ -273,6 +346,77 @@ final class TranslationService: @unchecked Sendable {
         return arr
             .compactMap { $0["id"] as? String }
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    // MARK: - Wire format parsing
+
+    /// Extracts incremental visible text from one SSE `data:` payload.
+    /// Returns whatever arrived: a text chunk, a terminal flag, or an error.
+    /// Unparseable payloads (keepalives, comments) are ignored leniently.
+    static func parseSSEPayload(
+        _ payload: String, flavor: APIFlavor
+    ) -> (text: String?, done: Bool, error: String?) {
+        switch flavor {
+        case .chatCompletions:
+            if payload == "[DONE]" { return (nil, true, nil) }
+            guard let data = payload.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let choices = obj["choices"] as? [[String: Any]],
+                  let delta = choices.first?["delta"] as? [String: Any]
+            else { return (nil, false, nil) }
+            return (delta["content"] as? String, false, nil)
+
+        case .responses:
+            guard let data = payload.data(using: .utf8),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let type = obj["type"] as? String
+            else { return (nil, false, nil) }
+            switch type {
+            case "response.output_text.delta":
+                return (obj["delta"] as? String, false, nil)
+            case "response.completed", "response.incomplete":
+                return (nil, true, nil)
+            case "response.failed":
+                let message = ((obj["response"] as? [String: Any])?["error"] as? [String: Any])?["message"] as? String
+                return (nil, true, message ?? "generation failed")
+            case "error":
+                return (nil, true, obj["message"] as? String ?? "stream error")
+            default:
+                // reasoning summary deltas, output_item lifecycle events, pings…
+                return (nil, false, nil)
+            }
+
+        case .anthropicMessages:
+            return (nil, false, nil)
+        }
+    }
+
+    /// Pulls the full visible text out of a non-streaming response body,
+    /// in either the chat-completions or the Responses format.
+    static func extractNonStreamedText(from data: Data, flavor: APIFlavor) -> String? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return nil }
+        switch flavor {
+        case .chatCompletions:
+            guard let choices = obj["choices"] as? [[String: Any]],
+                  let message = choices.first?["message"] as? [String: Any]
+            else { return nil }
+            return message["content"] as? String
+        case .responses:
+            guard let output = obj["output"] as? [[String: Any]] else { return nil }
+            var parts: [String] = []
+            for item in output where (item["type"] as? String) == "message" {
+                guard let content = item["content"] as? [[String: Any]] else { continue }
+                for part in content where (part["type"] as? String) == "output_text" {
+                    if let text = part["text"] as? String, !text.isEmpty {
+                        parts.append(text)
+                    }
+                }
+            }
+            return parts.isEmpty ? nil : parts.joined()
+        case .anthropicMessages:
+            return nil
+        }
     }
 
     private static func isRetryable(status: Int) -> Bool {
@@ -293,6 +437,35 @@ final class TranslationService: @unchecked Sendable {
     private static func backoff(_ attempt: Int) async throws {
         let seconds = min(0.5 * pow(2, Double(attempt - 1)), 4.0)
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError { return urlError.code == .cancelled }
+        return false
+    }
+
+    /// Request-building failures reflect the user's own settings, not a
+    /// server problem — they surface in the UI but aren't log-worthy.
+    private static func isConfigurationError(_ error: Error) -> Bool {
+        switch error as? TranslationError {
+        case .missingBaseURL, .missingModel, .badURL, .anthropicOnly:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Best-effort description of the endpoint a request will hit, used in
+    /// log entries when no concrete URL was constructed.
+    private static func endpointDescription(for config: Config) -> String {
+        var base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        while base.hasSuffix("/") { base.removeLast() }
+        switch config.flavor {
+        case .chatCompletions: return base + "/chat/completions"
+        case .responses: return base + "/responses"
+        case .anthropicMessages: return base + "/messages"
+        }
     }
 
     /// Non-streaming convenience used by the settings "Test" button.
@@ -316,66 +489,70 @@ final class TranslationService: @unchecked Sendable {
     ) async throws -> [String] {
         let request = try Self.makeAlternativesRequest(
             text: text, direction: direction, config: config, count: count, primary: primary)
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw TranslationError.badResponse }
-        guard http.statusCode == 200 else {
-            throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
-        }
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = obj["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String
-        else { throw TranslationError.badResponse }
-
-        let visible = ThinkFilter.filter(content).visible
-        let primaryNorm = primary.trimmingCharacters(in: .whitespacesAndNewlines)
-        var seen = Set<String>([primaryNorm])
-        var result: [String] = []
-        for raw in visible.split(separator: "\n", omittingEmptySubsequences: true) {
-            var line = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
-            // Strip leading list markers / numbering: "1. ", "2) ", "- ", "• ".
-            if let r = line.range(of: #"^\s*(\d+[.)]|[-*•])\s+"#, options: .regularExpression) {
-                line.removeSubrange(r)
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else { throw TranslationError.badResponse }
+            guard http.statusCode == 200 else {
+                throw TranslationError.http(http.statusCode, String(data: data, encoding: .utf8) ?? "")
             }
-            line = line.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
-            guard !line.isEmpty, !seen.contains(line) else { continue }
-            seen.insert(line)
-            result.append(line)
-            if result.count == count { break }
+            guard let content = Self.extractNonStreamedText(from: data, flavor: config.flavor)
+            else { throw TranslationError.badResponse }
+
+            let visible = ThinkFilter.filter(content).visible
+            let primaryNorm = primary.trimmingCharacters(in: .whitespacesAndNewlines)
+            var seen = Set<String>([primaryNorm])
+            var result: [String] = []
+            for raw in visible.split(separator: "\n", omittingEmptySubsequences: true) {
+                var line = String(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+                // Strip leading list markers / numbering: "1. ", "2) ", "- ", "• ".
+                if let r = line.range(of: #"^\s*(\d+[.)]|[-*•])\s+"#, options: .regularExpression) {
+                    line.removeSubrange(r)
+                }
+                line = line.trimmingCharacters(in: CharacterSet(charactersIn: "\"' "))
+                guard !line.isEmpty, !seen.contains(line) else { continue }
+                seen.insert(line)
+                result.append(line)
+                if result.count == count { break }
+            }
+            return result
+        } catch {
+            if !Self.isCancellation(error), !Self.isConfigurationError(error) {
+                ErrorLog.record(
+                    model: config.model,
+                    endpoint: request.url?.absoluteString ?? Self.endpointDescription(for: config),
+                    error: error)
+            }
+            throw error
         }
-        return result
     }
 
     private static func makeRequest(text: String, direction: Direction, config: Config) throws -> URLRequest {
-        let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !base.isEmpty else { throw TranslationError.missingBaseURL }
-        guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty else {
-            throw TranslationError.missingModel
-        }
-        var urlString = base
-        while urlString.hasSuffix("/") { urlString.removeLast() }
-        guard let url = URL(string: urlString + "/chat/completions"), url.scheme != nil else {
-            throw TranslationError.badURL
-        }
+        var request = try makeBaseRequest(config: config, timeout: 15)
+        let system = systemPrompt(for: direction)
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 15
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("TLang", forHTTPHeaderField: "X-Title")
-        if !config.apiKey.isEmpty {
-            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        var body: [String: Any]
+        switch config.flavor {
+        case .chatCompletions:
+            body = [
+                "model": config.model,
+                "stream": true,
+                "messages": [
+                    ["role": "system", "content": system],
+                    ["role": "user", "content": text],
+                ],
+            ]
+            if !config.omitsTemperature { body["temperature"] = 0.3 }
+        case .responses:
+            body = [
+                "model": config.model,
+                "stream": true,
+                "instructions": system,
+                "input": [["role": "user", "content": text]],
+            ]
+            if !config.omitsTemperature { body["temperature"] = 0.3 }
+        case .anthropicMessages:
+            throw TranslationError.anthropicOnly
         }
-
-        var body: [String: Any] = [
-            "model": config.model,
-            "stream": true,
-            "temperature": 0.3,
-            "messages": [
-                ["role": "system", "content": systemPrompt(for: direction)],
-                ["role": "user", "content": text],
-            ],
-        ]
         for (key, value) in config.extraBody {
             body[key] = value
         }
@@ -386,25 +563,7 @@ final class TranslationService: @unchecked Sendable {
     private static func makeAlternativesRequest(
         text: String, direction: Direction, config: Config, count: Int, primary: String
     ) throws -> URLRequest {
-        let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !base.isEmpty else { throw TranslationError.missingBaseURL }
-        guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty else {
-            throw TranslationError.missingModel
-        }
-        var urlString = base
-        while urlString.hasSuffix("/") { urlString.removeLast() }
-        guard let url = URL(string: urlString + "/chat/completions"), url.scheme != nil else {
-            throw TranslationError.badURL
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 20
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("TLang", forHTTPHeaderField: "X-Title")
-        if !config.apiKey.isEmpty {
-            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
-        }
+        var request = try makeBaseRequest(config: config, timeout: 20)
 
         let system = systemPrompt(for: direction) + """
 
@@ -417,19 +576,63 @@ final class TranslationService: @unchecked Sendable {
         no quotes, no commentary, no blank lines.
         """
 
-        var body: [String: Any] = [
-            "model": config.model,
-            "stream": false,
-            "temperature": 0.9,
-            "messages": [
-                ["role": "system", "content": system],
-                ["role": "user", "content": text],
-            ],
-        ]
+        var body: [String: Any]
+        switch config.flavor {
+        case .chatCompletions:
+            body = [
+                "model": config.model,
+                "stream": false,
+                "messages": [
+                    ["role": "system", "content": system],
+                    ["role": "user", "content": text],
+                ],
+            ]
+            if !config.omitsTemperature { body["temperature"] = 0.9 }
+        case .responses:
+            body = [
+                "model": config.model,
+                "stream": false,
+                "instructions": system,
+                "input": [["role": "user", "content": text]],
+            ]
+            if !config.omitsTemperature { body["temperature"] = 0.9 }
+        case .anthropicMessages:
+            throw TranslationError.anthropicOnly
+        }
         for (key, value) in config.extraBody {
             body[key] = value
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return request
+    }
+
+    /// Shared URL/auth/headers for POST requests; the caller fills the body
+    /// according to the wire format. `config.flavor` must not be .anthropicMessages.
+    private static func makeBaseRequest(config: Config, timeout: TimeInterval) throws -> URLRequest {
+        let base = config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !base.isEmpty else { throw TranslationError.missingBaseURL }
+        guard !config.model.trimmingCharacters(in: .whitespaces).isEmpty else {
+            throw TranslationError.missingModel
+        }
+        var urlString = base
+        while urlString.hasSuffix("/") { urlString.removeLast() }
+        let endpoint = config.flavor == .responses ? "/responses" : "/chat/completions"
+        guard let url = URL(string: urlString + endpoint), url.scheme != nil else {
+            throw TranslationError.badURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = timeout
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("TLang", forHTTPHeaderField: "X-Title")
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        for (field, value) in config.sessionHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        if !config.apiKey.isEmpty {
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
         return request
     }
 }

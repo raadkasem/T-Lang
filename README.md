@@ -1,7 +1,8 @@
 # TLang
 
 Native macOS Arabic ⇄ English translator powered by any OpenAI-compatible
-chat-completions API (OpenAI, OpenRouter, Ollama, LM Studio, vLLM, …).
+API — classic chat completions **and** the newer Responses API (OpenAI,
+OpenRouter, OpenCode, Ollama, LM Studio, vLLM, …).
 
 **Made with Claude by [Raad Kasem](https://github.com/raadkasem)**
 
@@ -52,7 +53,10 @@ The interface is fully localized into Arabic with right-to-left layout
   Auto / English / العربية in Settings.
 - **Markdown output** — the translation pane renders Markdown (headings, lists,
   bold/italic, inline code, code blocks, quotes), RTL-aware.
-- **Resilient** — transient network/5xx errors retry with exponential backoff.
+- **Resilient** — transient network/5xx errors retry with exponential backoff;
+  failed requests are logged to
+  `~/Library/Application Support/TLang/error.log`, and the error banner offers a
+  *Details* disclosure (full technical error + copy) and an *Open error log* button.
 - **Local history** — translations are saved to
   `~/Library/Application Support/TLang/history.json` (searchable, pinnable,
   never leaves your Mac; can be disabled).
@@ -83,12 +87,29 @@ Open **Settings → Provider** (⌘, or the gear icon) and pick a preset:
 |------------|-----------------------------------|---------|---------------------------------------------|
 | OpenAI     | `https://api.openai.com/v1`       | yes     | `reasoning_effort` (gpt-5 / o-series only)  |
 | OpenRouter | `https://openrouter.ai/api/v1`    | yes     | `reasoning: {enabled: false}`               |
+| OpenCode   | `https://opencode.ai/zen/go/v1`   | yes     | per-model (auto)                            |
 | Ollama     | `http://localhost:11434/v1`       | no      | `think: false`                              |
 | LM Studio  | `http://localhost:1234/v1`        | no      | `<think>` stripping only                    |
 | vLLM       | `http://localhost:8000/v1`        | no      | `chat_template_kwargs.enable_thinking=false`|
 | Custom     | anything OpenAI-compatible        | optional| `<think>` stripping only                    |
 
 Use **Test Connection** to verify — it translates "Hello" and shows the result.
+
+### API formats (chat completions vs Responses)
+
+TLang picks the wire format automatically from the model name:
+
+- **Responses API** (`POST /responses`) — used for OpenAI `gpt-5*` and
+  `o1`–`o4` models, and for the models OpenCode Go serves on that endpoint
+  (Grok 4.6, GPT 5.6 Luna, Muse Spark). Requests send `instructions` +
+  `input`, stream `response.output_text.delta` events, and disable thinking
+  with `reasoning: {effort}` instead of `reasoning_effort`.
+- **Chat completions** (`POST /chat/completions`) — everything else.
+- OpenCode Go models served over Anthropic's `/messages` protocol (MiniMax,
+  Qwen) are **not supported yet**; TLang shows a clear error if you pick one.
+- For [OpenCode Go](https://opencode.ai/docs/go) TLang identifies itself as
+  `TLang/<version>` and sends a stable `x-opencode-session` header so the
+  gateway can optimize routing and prompt caching.
 
 For fully offline translation, run [Ollama](https://ollama.com)
 (`ollama pull qwen3:8b`) or LM Studio and pick that preset.

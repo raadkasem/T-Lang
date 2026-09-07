@@ -4,6 +4,7 @@ struct MainView: View {
     @ObservedObject var vm = TranslatorViewModel.main
     @EnvironmentObject var settings: AppSettings
     @State private var showHistory = false
+    @State private var showErrorDetails = false
 
     var body: some View {
         ZStack {
@@ -31,6 +32,10 @@ struct MainView: View {
         }
         .frame(minWidth: 720, minHeight: 440)
         .animation(.easeInOut(duration: 0.2), value: showHistory)
+        .onChange(of: vm.errorMessage) { _, newError in
+            // A new translation wipes the error — collapse the details too.
+            if newError == nil { showErrorDetails = false }
+        }
         .tint(Theme.lapis)
         .environment(\.layoutDirection, settings.uiLayoutDirection)
     }
@@ -92,7 +97,20 @@ struct MainView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 12)
 
+            errorDetails
             footer
+        }
+        .animation(.easeInOut(duration: 0.2), value: showErrorDetails)
+    }
+
+    /// Full technical error (raw server body, URLs) behind the footer's
+    /// Details chevron. Collapses again when a new translation starts.
+    @ViewBuilder
+    private var errorDetails: some View {
+        if showErrorDetails, let detail = vm.errorDetail {
+            TechnicalErrorDetails(detail: detail, isExpanded: $showErrorDetails)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
         }
     }
 
@@ -111,6 +129,17 @@ struct MainView: View {
                     .truncationMode(.tail)
                     .frame(maxWidth: 300, alignment: .trailing)
                     .help(error)
+                if vm.errorDetail != nil {
+                    Button {
+                        showErrorDetails.toggle()
+                    } label: {
+                        Image(systemName: showErrorDetails ? "chevron.up.circle" : "chevron.down.circle")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Theme.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(settings.tr(showErrorDetails ? "Hide details" : "Details"))
+                }
             }
             if vm.isTranslating {
                 Button {

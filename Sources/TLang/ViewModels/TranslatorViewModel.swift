@@ -16,6 +16,9 @@ final class TranslatorViewModel: ObservableObject {
     @Published var isThinkingPhase = false
     @Published var retryAttempt = 0
     @Published var errorMessage: String?
+    /// Full technical context (raw server body, URLs) behind `errorMessage`.
+    /// Nil for network blips where the friendly summary already says it all.
+    @Published var errorDetail: String?
     @Published var direction: Direction = .enToAr
 
     /// Alternative phrasings (index 0 is always the primary `outputText`).
@@ -51,6 +54,7 @@ final class TranslatorViewModel: ObservableObject {
             direction = LanguageDetector.detect(sourceText)
         }
         errorMessage = nil
+        errorDetail = nil
         debounceTask?.cancel()
         guard !suppressAuto, AppSettings.shared.autoTranslate else { return }
         let snapshot = sourceText
@@ -94,6 +98,7 @@ final class TranslatorViewModel: ObservableObject {
         isThinkingPhase = false
         retryAttempt = 0
         errorMessage = nil
+        errorDetail = nil
         outputText = ""
         alternatives = []
         variantIndex = 0
@@ -139,6 +144,7 @@ final class TranslatorViewModel: ObservableObject {
             } catch {
                 guard let self, self.generation == gen else { return }
                 self.errorMessage = Self.friendlyMessage(for: error)
+                self.errorDetail = TranslationError.technicalDetail(for: error)
                 self.isTranslating = false
                 self.isThinkingPhase = false
                 self.retryAttempt = 0
@@ -229,6 +235,7 @@ final class TranslatorViewModel: ObservableObject {
         SpeechService.shared.stop()
         setTexts(source: "", output: "")
         errorMessage = nil
+        errorDetail = nil
     }
 
     /// Applies a mid-stream snapshot, skipping the tag filter when no tags can exist.

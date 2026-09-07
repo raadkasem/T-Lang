@@ -266,6 +266,8 @@ private struct ProviderSettingsTab: View {
     }
 
     @State private var testState: TestState = .idle
+    @State private var testDetail: String?
+    @State private var showTestDetails = false
     @State private var showKey = false
 
     var body: some View {
@@ -290,6 +292,8 @@ private struct ProviderSettingsTab: View {
                         .frame(width: 160)
                         .onChange(of: settings.provider) { _, _ in
                             testState = .idle
+                            testDetail = nil
+                            showTestDetails = false
                         }
                     }
 
@@ -321,7 +325,7 @@ private struct ProviderSettingsTab: View {
 
                 SettingsCard(
                     title: "Reasoning",
-                    footer: "Sends the right knob per provider — OpenAI: reasoning_effort · OpenRouter: reasoning.enabled=false · Ollama: think=false · vLLM: chat_template_kwargs. Inline <think> blocks are always stripped as a fallback."
+                    footer: "Sends the right knob per provider — OpenAI: reasoning_effort · OpenRouter: reasoning.enabled=false · Ollama: think=false · vLLM: chat_template_kwargs. Models on the Responses API (gpt-5/o-series, OpenCode Grok/GPT) use reasoning.effort instead. Inline <think> blocks are always stripped as a fallback."
                 ) {
                     Toggle(settings.tr("Disable model thinking / reasoning"), isOn: $settings.disableThinking)
                         .toggleStyle(PillToggleStyle(tint: Theme.gold))
@@ -361,6 +365,10 @@ private struct ProviderSettingsTab: View {
                         }
                         Spacer()
                     }
+
+                    if case .failure = testState, let detail = testDetail {
+                        TechnicalErrorDetails(detail: detail, isExpanded: $showTestDetails)
+                    }
                 }
             }
         }
@@ -369,6 +377,8 @@ private struct ProviderSettingsTab: View {
 
     private func runTest() {
         testState = .testing
+        testDetail = nil
+        showTestDetails = false
         let config = TranslationService.currentConfig()
         Task {
             do {
@@ -381,7 +391,8 @@ private struct ProviderSettingsTab: View {
             } catch {
                 let message = (error as? TranslationError)?.errorDescription
                     ?? error.localizedDescription
-                testState = .failure(String(message.prefix(120)))
+                testDetail = TranslationError.technicalDetail(for: error)
+                testState = .failure(String(message.prefix(200)))
             }
         }
     }
@@ -636,11 +647,11 @@ private struct AboutTab: View {
             Text("TLang")
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundStyle(Theme.textPrimary)
-            Text(settings.tr("Arabic ⇄ English translation, powered by any\nOpenAI-compatible chat-completions API."))
+            Text(settings.tr("Arabic ⇄ English translation, powered by any\nOpenAI-compatible API (chat completions or Responses)."))
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
-            Text(settings.tr("Version") + " 1.7.1")
+            Text(settings.tr("Version") + " 1.8.0")
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.horizontal, 9)

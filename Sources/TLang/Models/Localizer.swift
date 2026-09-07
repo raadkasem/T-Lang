@@ -113,6 +113,13 @@ enum Localizer {
             "يُحفظ مفتاح الـ API في سلسلة مفاتيح macOS. الخوادم المحلية (Ollama وLM Studio وvLLM) لا تحتاج إلى مفتاح.",
         "Reasoning": "الاستدلال",
         "Disable model thinking / reasoning": "تعطيل تفكير/استدلال النموذج",
+        "Sends the right knob per provider — OpenAI: reasoning_effort · OpenRouter: reasoning.enabled=false · Ollama: think=false · vLLM: chat_template_kwargs. Models on the Responses API (gpt-5/o-series, OpenCode Grok/GPT) use reasoning.effort instead. Inline <think> blocks are always stripped as a fallback.":
+            "يُرسل المفتاح المناسب لكل مزوّد — OpenAI: reasoning_effort · OpenRouter: reasoning.enabled=false · Ollama: think=false · vLLM: chat_template_kwargs. النماذج على واجهة Responses ‏(gpt-5 وسلسلة o وGrok/GPT من OpenCode) تستخدم reasoning.effort بدلًا منها. تُزال كتل <think> المضمّنة دائمًا كخيار احتياطي.",
+        "Details": "التفاصيل",
+        "Hide details": "إخفاء التفاصيل",
+        "Open error log": "افتح سجل الأخطاء",
+        "Latest errors are logged to ~/Library/Application Support/TLang/error.log":
+            "تُسجَّل الأخطاء الكاملة في ~/Library/Application Support/TLang/error.log",
         "Connection": "الاتصال",
 
         // Settings — behavior
@@ -159,8 +166,8 @@ enum Localizer {
             "يُحفظ السجل في ~/Library/Application Support/TLang/history.json ولا يغادر هذا الجهاز.",
 
         // About
-        "Arabic ⇄ English translation, powered by any\nOpenAI-compatible chat-completions API.":
-            "ترجمة عربي ⇄ إنجليزي، مدعومة بأي واجهة\nمحادثة متوافقة مع OpenAI.",
+        "Arabic ⇄ English translation, powered by any\nOpenAI-compatible API (chat completions or Responses).":
+            "ترجمة عربي ⇄ إنجليزي، مدعومة بأي واجهة\nمتوافقة مع OpenAI (محادثات أو Responses).",
         "Copy text anywhere — TLang translates it automatically":
             "انسخ أي نص — يترجمه TLang تلقائيًا",
         "Hold ⌘ and double-tap C for the floating translator":
